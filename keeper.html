@@ -1,0 +1,189 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Duka — Scan & Sell</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="https://cdn.jsdelivr.net/npm/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+</head>
+<body>
+<div class="screen">
+
+  <div class="topbar">
+    <div class="brand">Duk<span>a</span></div>
+    <div style="display:flex; align-items:center; gap:10px;">
+      <span class="role-badge">Keeper</span>
+      <button class="signout-link" id="signOutBtn">Sign out</button>
+    </div>
+  </div>
+
+  <button class="scan-button" id="startScanBtn">
+    📷 Scan a Product
+    <span class="sub">Tap to open the camera</span>
+  </button>
+
+  <div id="reader" style="display:none;"></div>
+  <button class="btn-secondary" id="stopScanBtn" style="display:none; margin-bottom:16px;">Cancel Scan</button>
+
+  <div class="tag-card" id="saleCard" style="display:none;">
+    <span class="tag-label">Selling</span>
+    <div class="tag-value" id="saleProductName" style="font-size:20px;">—</div>
+    <div class="tag-sub" id="saleUnitPrice"></div>
+
+    <div class="field" style="margin-top:14px;">
+      <label for="saleQty">Quantity</label>
+      <input type="number" id="saleQty" min="0.1" step="0.1" value="1">
+    </div>
+
+    <div style="display:flex; gap:10px;">
+      <button class="btn-secondary" id="cancelSaleBtn" style="flex:1;">Cancel</button>
+      <button class="btn-primary" id="confirmSaleBtn" style="flex:1;">Confirm Sale</button>
+    </div>
+  </div>
+
+  <h2 class="section-title">Item not found?</h2>
+  <p class="hint">If a customer asks for something out of stock or not yet in the system, log it — this helps restock the right things.</p>
+  <div class="tag-card">
+    <div class="field" style="margin-bottom:12px;">
+      <label for="missedName">What did they ask for?</label>
+      <input type="text" id="missedName" placeholder="e.g. Cooking oil 1L">
+    </div>
+    <button class="btn-danger-outline" id="logMissedBtn">Log Missed Sale</button>
+  </div>
+
+  <div id="toastArea"></div>
+</div>
+
+<script src="supabaseClient.js"></script>
+<script>
+  let profile = null;
+  let html5QrCode = null;
+  let currentProduct = null;
+
+  function showToast(msg){
+    const area = document.getElementById('toastArea');
+    const el = document.createElement('div');
+    el.className = 'toast';
+    el.textContent = msg;
+    area.appendChild(el);
+    setTimeout(() => el.remove(), 2600);
+  }
+
+  async function lookupProduct(barcode){
+    const { data, error } = await supabase
+      .from('products')
+      .select('id, name, unit, selling_price, current_stock')
+      .eq('owner_id', profile.owner_id)
+      .eq('barcode', barcode)
+      .maybeSingle();
+    if (error) { console.error(error); return null; }
+    return data;
+  }
+
+  function openSaleCard(product){
+    currentProduct = product;
+    document.getElementById('saleProductName').textContent = product.name;
+    document.getElementById('saleUnitPrice').textContent =
+      `${Math.round(product.selling_price)} Birr per ${product.unit} · ${product.current_stock} in stock`;
+    document.getElementById('saleQty').value = 1;
+    document.getElementById('saleCard').style.display = 'block';
+  }
+
+  function closeSaleCard(){
+    currentProduct = null;
+    document.getElementById('saleCard').style.display = 'none';
+  }
+
+  async function onScanSuccess(decodedText){
+    await stopScanner();
+    const product = await lookupProduct(decodedText);
+    if (!product){
+      showToast("That barcode isn't in your shop's catalog.");
+      return;
+    }
+    openSaleCard(product);
+  }
+
+  async function startScanner(){
+    document.getElementById('reader').style.display = 'block';
+    document.getElementById('stopScanBtn').style.display = 'block';
+    document.getElementById('startScanBtn').style.display = 'none';
+    html5QrCode = new Html5Qrcode("reader");
+    try {
+      await html5QrCode.start(
+        { facingMode: "environment" },
+        { fps: 10, qrbox: 220 },
+        onScanSuccess
+      );
+    } catch (e) {
+      showToast("Couldn't open the camera. Check permissions.");
+      await stopScanner();
+    }
+  }
+
+  async function stopScanner(){
+    if (html5QrCode){
+      try { await html5QrCode.stop(); html5QrCode.clear(); } catch(e){}
+      html5QrCode = null;
+    }
+    document.getElementById('reader').style.display = 'none';
+    document.getElementById('stopScanBtn').style.display = 'none';
+    document.getElementById('startScanBtn').style.display = 'block';
+  }
+
+  document.getElementById('startScanBtn').addEventListener('click', startScanner);
+  document.getElementById('stopScanBtn').addEventListener('click', stopScanner);
+  document.getElementById('cancelSaleBtn').addEventListener('click', closeSaleCard);
+
+  document.getElementById('confirmSaleBtn').addEventListener('click', async () => {
+    if (!currentProduct) return;
+    const qty = parseFloat(document.getElementById('saleQty').value);
+    if (!qty || qty <= 0){ showToast('Enter a valid quantity.'); return; }
+
+    // Need cost_price for the profit snapshot, but the keeper's UI never displays it.
+    const { data: full, error: fetchErr } = await supabase
+      .from('products')
+      .select('cost_price, selling_price')
+      .eq('id', currentProduct.id)
+      .single();
+    if (fetchErr){ showToast('Could not complete sale.'); return; }
+
+    const { error } = await supabase.from('sales').insert({
+      owner_id: profile.owner_id,
+      product_id: currentProduct.id,
+      sold_by: profile.id,
+      quantity: qty,
+      unit_price_at_sale: full.selling_price,
+      cost_price_at_sale: full.cost_price
+    });
+    if (error){ showToast('Could not complete sale: ' + error.message); return; }
+
+    showToast(`✅ Sold ${qty} ${currentProduct.unit} of ${currentProduct.name}`);
+    closeSaleCard();
+  });
+
+  document.getElementById('logMissedBtn').addEventListener('click', async () => {
+    const name = document.getElementById('missedName').value.trim();
+    if (!name){ showToast('Enter what the customer asked for.'); return; }
+    const { error } = await supabase.from('missed_sales').insert({
+      owner_id: profile.owner_id,
+      product_name_free_text: name,
+      reported_by: profile.id
+    });
+    if (error){ showToast('Could not log it: ' + error.message); return; }
+    document.getElementById('missedName').value = '';
+    showToast('Logged — thanks!');
+  });
+
+  document.getElementById('signOutBtn').addEventListener('click', signOut);
+
+  (async () => {
+    profile = await requireRole('keeper');
+  })();
+</script>
+</body>
+</html>

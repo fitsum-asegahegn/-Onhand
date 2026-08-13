@@ -1,0 +1,244 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Duka — Owner Dashboard</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.6/dist/JsBarcode.all.min.js"></script>
+</head>
+<body>
+<div class="screen">
+
+  <div class="topbar">
+    <div class="brand">Duk<span>a</span></div>
+    <div style="display:flex; align-items:center; gap:10px;">
+      <span class="role-badge">Owner</span>
+      <button class="signout-link" id="signOutBtn">Sign out</button>
+    </div>
+  </div>
+
+  <div class="tag-card">
+    <span class="tag-label">Your shop code</span>
+    <div class="tag-value" id="shopCode" style="font-size:15px; word-break:break-all;">—</div>
+    <p class="tag-sub">Give this to a keeper so they can join your shop when they sign up.</p>
+  </div>
+
+  <h2 class="section-title">Sales Overview</h2>
+  <div style="display:flex; gap:8px; margin-bottom:12px;">
+    <button class="btn-secondary period-btn active" data-period="today" style="flex:1; padding:9px;">Today</button>
+    <button class="btn-secondary period-btn" data-period="7" style="flex:1; padding:9px;">7 days</button>
+    <button class="btn-secondary period-btn" data-period="30" style="flex:1; padding:9px;">30 days</button>
+  </div>
+  <div class="stat-row triple">
+    <div class="tag-card" style="margin-bottom:0;">
+      <span class="tag-label">Revenue</span>
+      <div class="tag-value" id="statRevenue">—</div>
+    </div>
+    <div class="tag-card" style="margin-bottom:0;">
+      <span class="tag-label">Profit</span>
+      <div class="tag-value good" id="statProfit">—</div>
+    </div>
+    <div class="tag-card" style="margin-bottom:0;">
+      <span class="tag-label">Items sold</span>
+      <div class="tag-value" id="statItems">—</div>
+    </div>
+  </div>
+
+  <h2 class="section-title">Needs Attention</h2>
+  <div id="alertsList"><p class="hint">Checking stock levels…</p></div>
+
+  <h2 class="section-title">Add a Product</h2>
+  <p class="hint">A barcode is generated automatically — print or screenshot the label after saving.</p>
+  <div class="tag-card">
+    <div class="field">
+      <label for="pName">Product name</label>
+      <input type="text" id="pName" placeholder="e.g. Sugar">
+    </div>
+    <div class="field">
+      <label for="pUnit">Sold by</label>
+      <select id="pUnit">
+        <option value="piece">Piece</option>
+        <option value="kg">Kilogram (kg)</option>
+        <option value="litre">Litre</option>
+        <option value="pack">Pack</option>
+      </select>
+    </div>
+    <div class="stat-row" style="margin-bottom:14px;">
+      <div class="field" style="margin-bottom:0;">
+        <label for="pCost">Cost price (Birr)</label>
+        <input type="number" id="pCost" min="0" step="0.5">
+      </div>
+      <div class="field" style="margin-bottom:0;">
+        <label for="pPrice">Selling price (Birr)</label>
+        <input type="number" id="pPrice" min="0" step="0.5">
+      </div>
+    </div>
+    <div class="stat-row" style="margin-bottom:14px;">
+      <div class="field" style="margin-bottom:0;">
+        <label for="pStock">Opening stock</label>
+        <input type="number" id="pStock" min="0" step="0.5" value="0">
+      </div>
+      <div class="field" style="margin-bottom:0;">
+        <label for="pThreshold">Low stock alert below</label>
+        <input type="number" id="pThreshold" min="0" step="0.5" value="5">
+      </div>
+    </div>
+    <button class="btn-primary" id="addProductBtn">Save Product & Generate Barcode</button>
+    <div id="newBarcodeArea" style="display:none; margin-top:14px;">
+      <div class="barcode-preview"><svg id="newBarcodeSvg"></svg></div>
+      <p class="hint" style="text-align:center; margin-top:0;">Print this label and stick it on the product.</p>
+    </div>
+  </div>
+
+  <h2 class="section-title">Your Products</h2>
+  <div id="productList"><p class="hint">Loading products…</p></div>
+
+</div>
+
+<script src="supabaseClient.js"></script>
+<script>
+  let profile = null;
+  let allProducts = [];
+
+  function fmtBirr(n){ return Math.round(n).toLocaleString('en-US') + ' Birr'; }
+
+  function periodStartDate(period){
+    const now = new Date();
+    if (period === 'today'){ now.setHours(0,0,0,0); return now; }
+    const days = period === '7' ? 7 : 30;
+    now.setDate(now.getDate() - days);
+    return now;
+  }
+
+  async function loadStats(period){
+    const since = periodStartDate(period).toISOString();
+    const { data, error } = await supabase
+      .from('sales')
+      .select('quantity, unit_price_at_sale, cost_price_at_sale')
+      .eq('owner_id', profile.id)
+      .gte('sold_at', since);
+    if (error) { console.error(error); return; }
+
+    let revenue = 0, profitTotal = 0, items = 0;
+    data.forEach(s => {
+      revenue += s.quantity * s.unit_price_at_sale;
+      profitTotal += s.quantity * (s.unit_price_at_sale - s.cost_price_at_sale);
+      items += Number(s.quantity);
+    });
+    document.getElementById('statRevenue').textContent = fmtBirr(revenue);
+    document.getElementById('statProfit').textContent = fmtBirr(profitTotal);
+    document.getElementById('statItems').textContent = items.toLocaleString('en-US');
+  }
+
+  document.querySelectorAll('.period-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('.period-btn').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      loadStats(btn.dataset.period);
+    });
+  });
+
+  async function loadProducts(){
+    const { data, error } = await supabase
+      .from('products')
+      .select('*')
+      .eq('owner_id', profile.id)
+      .order('name');
+    if (error) { console.error(error); return; }
+    allProducts = data;
+    renderProducts();
+    renderAlerts();
+  }
+
+  function renderProducts(){
+    const el = document.getElementById('productList');
+    if (!allProducts.length){
+      el.innerHTML = '<p class="empty-state">No products yet. Add your first one above.</p>';
+      return;
+    }
+    el.innerHTML = allProducts.map(p => {
+      const low = Number(p.current_stock) <= Number(p.low_stock_threshold);
+      return `
+        <div class="product-row">
+          <div>
+            <div class="name">${escapeHtml(p.name)}</div>
+            <div class="meta">${p.current_stock} ${p.unit} in stock</div>
+          </div>
+          <span class="stock-flag ${low ? 'low' : 'ok'}">${low ? 'Low' : 'OK'}</span>
+        </div>`;
+    }).join('');
+  }
+
+  function renderAlerts(){
+    const el = document.getElementById('alertsList');
+    const lowStock = allProducts.filter(p => Number(p.current_stock) <= Number(p.low_stock_threshold));
+    if (!lowStock.length){
+      el.innerHTML = '<p class="empty-state">Nothing needs attention right now.</p>';
+      return;
+    }
+    el.innerHTML = lowStock.map(p => `
+      <div class="alert-card urgent">
+        <div class="alert-title">⚠️ Reorder ${escapeHtml(p.name)} soon</div>
+        <div>Only ${p.current_stock} ${p.unit} left in stock.</div>
+      </div>`).join('');
+  }
+
+  function escapeHtml(s){
+    const d = document.createElement('div');
+    d.textContent = s;
+    return d.innerHTML;
+  }
+
+  function generateBarcodeValue(){
+    return 'DUKA' + Date.now().toString().slice(-9);
+  }
+
+  document.getElementById('addProductBtn').addEventListener('click', async () => {
+    const name = document.getElementById('pName').value.trim();
+    const unit = document.getElementById('pUnit').value;
+    const cost = parseFloat(document.getElementById('pCost').value) || 0;
+    const price = parseFloat(document.getElementById('pPrice').value) || 0;
+    const stock = parseFloat(document.getElementById('pStock').value) || 0;
+    const threshold = parseFloat(document.getElementById('pThreshold').value) || 0;
+
+    if (!name){ alert('Enter a product name.'); return; }
+
+    const barcode = generateBarcodeValue();
+    const { error } = await supabase.from('products').insert({
+      owner_id: profile.id,
+      name, unit,
+      cost_price: cost,
+      selling_price: price,
+      current_stock: stock,
+      low_stock_threshold: threshold,
+      barcode
+    });
+    if (error){ alert('Could not save product: ' + error.message); return; }
+
+    document.getElementById('newBarcodeArea').style.display = 'block';
+    JsBarcode('#newBarcodeSvg', barcode, { format: 'CODE128', height: 60, displayValue: true, fontSize: 12 });
+
+    document.getElementById('pName').value = '';
+    document.getElementById('pCost').value = '';
+    document.getElementById('pPrice').value = '';
+    document.getElementById('pStock').value = '0';
+
+    await loadProducts();
+  });
+
+  document.getElementById('signOutBtn').addEventListener('click', signOut);
+
+  (async () => {
+    profile = await requireRole('owner');
+    if (!profile) return;
+    document.getElementById('shopCode').textContent = profile.id;
+    await loadStats('today');
+    await loadProducts();
+  })();
+</script>
+</body>
+</html>
