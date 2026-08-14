@@ -1,4 +1,4 @@
-<!DOCTYPE html> 
+<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8">
@@ -161,10 +161,9 @@
           return;
         }
 
-        // 3. Ensure session
+        // 3. Ensure session – if not, sign in manually
         const { data: { session } } = await supabase.auth.getSession();
         if (!session) {
-          // Try signing in
           const { error: signInError } = await supabase.auth.signInWithPassword({ email, password });
           if (signInError) {
             errEl.textContent = 'Auto-login failed: ' + signInError.message;
@@ -173,13 +172,9 @@
           }
         }
 
-        // 4. Redirect
-        const profile = await getCurrentProfile();
-        if (!profile) {
-          showError('Profile exists but could not be fetched. Please try signing in.');
-          return;
-        }
-        window.location.href = profile.role === 'owner' ? 'owner.html' : 'keeper.html';
+        // 4. Redirect directly based on role (skip fetching profile)
+        // This avoids the "Profile exists but could not be fetched" issue
+        window.location.href = role === 'owner' ? 'owner.html' : 'keeper.html';
 
       } catch (e) {
         errEl.textContent = 'Unexpected error: ' + e.message;
