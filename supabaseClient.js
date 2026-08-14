@@ -1,7 +1,6 @@
 const SUPABASE_URL = "https://dcbxecruynlbtfwbzkju.supabase.co";
 const SUPABASE_ANON_KEY = "sb_publishable_zV4sIl58hanoYCEoUQn46w_EfpdHvQT";
 
-// Make supabase global
 var supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
 async function getCurrentProfile() {
