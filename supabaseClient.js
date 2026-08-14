@@ -36,5 +36,6 @@ async function signOut() {
   window.location.href = 'index.html';
 }
 
+// Make them globally available
 window.getCurrentProfile = getCurrentProfile;
 window.signOut = signOut;
