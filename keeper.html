@@ -30,7 +30,20 @@
   </button>
 
   <div id="reader" style="display:none; margin:10px 0;"></div>
-  <button class="btn-secondary" id="stopScanBtn" style="display:none; margin-bottom:16px;">Cancel Scan</button>
+  <div id="scanControls" style="display:none; gap:10px; margin-bottom:16px;">
+    <button class="btn-secondary" id="stopScanBtn" style="flex:1;">Cancel Scan</button>
+    <button class="btn-secondary" id="torchBtn" style="flex:1; display:none;">💡 Torch</button>
+  </div>
+
+  <!-- Manual fallback: always available, not just when the camera fails -->
+  <div class="tag-card" style="margin-bottom:16px;">
+    <span class="tag-label">Or type the code</span>
+    <p class="hint" style="margin:2px 0 10px;">Printed on the label under the barcode lines.</p>
+    <div style="display:flex; gap:8px;">
+      <input type="text" id="manualBarcode" placeholder="e.g. ONHAND738514783" style="flex:1;">
+      <button class="btn-primary" id="manualLookupBtn" style="flex:0 0 auto; padding:12px 18px;">Find</button>
+    </div>
+  </div>
 
   <div class="tag-card" id="saleCard" style="display:none;">
     <span class="tag-label">Selling</span>
@@ -66,6 +79,7 @@
   let profile = null;
   let html5QrCode = null;
   let currentProduct = null;
+  let torchOn = false;
 
   function showToast(msg, isError = false) {
     const area = document.getElementById('toastArea');
@@ -82,7 +96,7 @@
         .from('products')
         .select('id, name, unit, selling_price, current_stock')
         .eq('owner_id', profile.owner_id)
-        .eq('barcode', barcode)
+        .eq('barcode', barcode.trim())
         .maybeSingle();
       if (error) throw error;
       return data;
@@ -107,14 +121,11 @@
     document.getElementById('saleCard').style.display = 'none';
   }
 
-  // Called when a barcode is successfully decoded
   async function onScanSuccess(decodedText) {
-    await stopScanner(); // close camera
+    await stopScanner();
     const product = await lookupProduct(decodedText);
     if (!product) {
       showToast("That barcode isn't in your shop's catalog.", true);
-      // Offer to scan again
-      document.getElementById('startScanBtn').style.display = 'block';
       return;
     }
     openSaleCard(product);
@@ -123,20 +134,50 @@
   async function startScanner() {
     try {
       document.getElementById('reader').style.display = 'block';
-      document.getElementById('stopScanBtn').style.display = 'block';
+      document.getElementById('scanControls').style.display = 'flex';
       document.getElementById('startScanBtn').style.display = 'none';
 
-      html5QrCode = new Html5Qrcode("reader");
+      html5QrCode = new Html5Qrcode("reader", {
+        formatsToSupport: [ Html5QrcodeSupportedFormats.CODE_128 ],
+        useBarCodeDetectorIfSupported: true,
+        verbose: false
+      });
+
       await html5QrCode.start(
         { facingMode: "environment" },
-        { fps: 10, qrbox: { width: 250, height: 250 } },
+        {
+          fps: 15,
+          qrbox: (viewfinderWidth, viewfinderHeight) => {
+            const w = Math.floor(Math.min(viewfinderWidth * 0.85, 380));
+            return { width: w, height: Math.floor(w * 0.45) };
+          }
+        },
         onScanSuccess
       );
+
+      try {
+        const capabilities = html5QrCode.getRunningTrackCapabilities();
+        if (capabilities && capabilities.torch) {
+          document.getElementById('torchBtn').style.display = 'block';
+        }
+      } catch (e) { /* not supported on this device — fine */ }
+
     } catch (e) {
       showToast("Couldn't open camera. Check permissions.", true);
       await stopScanner();
     }
   }
+
+  document.getElementById('torchBtn').addEventListener('click', async () => {
+    if (!html5QrCode) return;
+    try {
+      torchOn = !torchOn;
+      await html5QrCode.applyVideoConstraints({ advanced: [{ torch: torchOn }] });
+      document.getElementById('torchBtn').textContent = torchOn ? '💡 Torch On' : '💡 Torch';
+    } catch (e) {
+      showToast('Torch not available on this device.', true);
+    }
+  });
 
   async function stopScanner() {
     if (html5QrCode) {
@@ -146,19 +187,29 @@
       } catch (e) {}
       html5QrCode = null;
     }
+    torchOn = false;
     document.getElementById('reader').style.display = 'none';
-    document.getElementById('stopScanBtn').style.display = 'none';
+    document.getElementById('scanControls').style.display = 'none';
+    document.getElementById('torchBtn').style.display = 'none';
+    document.getElementById('torchBtn').textContent = '💡 Torch';
     document.getElementById('startScanBtn').style.display = 'block';
   }
 
-  // ----- Event listeners -----
+  document.getElementById('manualLookupBtn').addEventListener('click', async () => {
+    const code = document.getElementById('manualBarcode').value.trim();
+    if (!code) { showToast('Enter a barcode number.', true); return; }
+    const product = await lookupProduct(code);
+    if (!product) { showToast("That barcode isn't in your shop's catalog.", true); return; }
+    document.getElementById('manualBarcode').value = '';
+    openSaleCard(product);
+  });
+  document.getElementById('manualBarcode').addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') document.getElementById('manualLookupBtn').click();
+  });
+
   document.getElementById('startScanBtn').addEventListener('click', startScanner);
   document.getElementById('stopScanBtn').addEventListener('click', stopScanner);
-  document.getElementById('cancelSaleBtn').addEventListener('click', () => {
-    closeSaleCard();
-    // Show scan button again
-    document.getElementById('startScanBtn').style.display = 'block';
-  });
+  document.getElementById('cancelSaleBtn').addEventListener('click', closeSaleCard);
 
   document.getElementById('confirmSaleBtn').addEventListener('click', async () => {
     if (!currentProduct) return;
@@ -169,7 +220,6 @@
     }
 
     try {
-      // Fetch cost price (keeper never sees it)
       const { data: full, error: fetchErr } = await supabase
         .from('products')
         .select('cost_price, selling_price')
@@ -189,8 +239,6 @@
 
       showToast(`✅ Sold ${qty} ${currentProduct.unit} of ${currentProduct.name}`);
       closeSaleCard();
-      // Allow scanning again
-      document.getElementById('startScanBtn').style.display = 'block';
     } catch (e) {
       showToast('Sale failed: ' + e.message, true);
     }
@@ -216,14 +264,9 @@
     }
   });
 
-  // On load
   (async () => {
     profile = await requireRole('keeper');
-    if (!profile) {
-      // requireRole already redirects if not keeper
-      return;
-    }
-    // If the owner_id is missing, show error
+    if (!profile) return;
     if (!profile.owner_id) {
       document.querySelector('.screen').innerHTML = `
         <div style="padding:40px; text-align:center; color:red;">
