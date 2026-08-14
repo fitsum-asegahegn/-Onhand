@@ -1,4 +1,4 @@
-<!DOCTYPE html> 
+<!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="UTF-8">
@@ -74,13 +74,8 @@
 <script src="supabaseClient.js"></script>
 <script>
   (function() {
-    // 1. Make sure supabase is available
-    if (typeof supabase === 'undefined') {
-      alert('Supabase client not loaded. Check your network or supabaseClient.js');
-      return;
-    }
 
-    // 2. Toggle sign-in / sign-up
+    // ========== UI toggles ==========
     const toggleSignup = document.getElementById('toggleSignup');
     const signInCard = document.getElementById('signInCard');
     const signUpCard = document.getElementById('signUpCard');
@@ -91,7 +86,6 @@
       toggleSignup.textContent = showingSignup ? 'New here? Create an account' : 'Already have an account? Sign in';
     });
 
-    // 3. Show/hide shop code field based on role
     document.querySelectorAll('input[name="signupRole"]').forEach(el => {
       el.addEventListener('change', () => {
         document.getElementById('shopCodeField').style.display =
@@ -99,18 +93,21 @@
       });
     });
 
-    // 4. routeByRole – now uses window.getCurrentProfile (exposed in supabaseClient.js)
+    // ========== Shared redirect ==========
     async function routeByRole() {
-      const profile = await getCurrentProfile();  // now globally available
+      alert('routeByRole called');
+      const profile = await getCurrentProfile();
       if (!profile) {
-        // If no profile, maybe sign-in failed; stay on page
-        console.warn('No profile found, staying on sign-in page.');
+        alert('No profile found – redirecting to index');
+        window.location.href = 'index.html';
         return;
       }
-      window.location.href = profile.role === 'owner' ? 'owner.html' : 'keeper.html';
+      const target = profile.role === 'owner' ? 'owner.html' : 'keeper.html';
+      alert('Redirecting to ' + target);
+      window.location.href = target;
     }
 
-    // 5. Sign In
+    // ========== Sign In ==========
     document.getElementById('signInBtn').addEventListener('click', async () => {
       const email = document.getElementById('siEmail').value.trim();
       const password = document.getElementById('siPassword').value;
@@ -122,12 +119,12 @@
         if (error) { errEl.textContent = error.message; errEl.style.display = 'block'; return; }
         await routeByRole();
       } catch (e) {
-        errEl.textContent = 'Unexpected error: ' + e.message;
+        errEl.textContent = 'Unexpected: ' + e.message;
         errEl.style.display = 'block';
       }
     });
 
-    // 6. Sign Up
+    // ========== Sign Up ==========
     document.getElementById('signUpBtn').addEventListener('click', async () => {
       const role = document.querySelector('input[name="signupRole"]:checked').value;
       const fullName = document.getElementById('suName').value.trim();
@@ -138,27 +135,46 @@
       const okEl = document.getElementById('suSuccess');
       errEl.style.display = 'none'; okEl.style.display = 'none';
 
+      // ---- Validation ----
       if (!fullName || !email || !password) {
-        errEl.textContent = 'Please fill in all fields.'; errEl.style.display = 'block'; return;
+        errEl.textContent = 'Please fill in all fields.';
+        errEl.style.display = 'block';
+        return;
       }
       if (role === 'keeper' && !shopCode) {
-        errEl.textContent = 'Ask your shop owner for the shop code.'; errEl.style.display = 'block'; return;
+        errEl.textContent = 'Ask your shop owner for the shop code.';
+        errEl.style.display = 'block';
+        return;
       }
 
       try {
-        // Sign up
-        const { data: signUpData, error: signUpError } = await supabase.auth.signUp({ email, password });
-        if (signUpError) { errEl.textContent = signUpError.message; errEl.style.display = 'block'; return; }
+        // 1. Sign up
+        alert('Signing up: ' + email);
+        const { data: signUpData, error: signUpError } = await supabase.auth.signUp({
+          email,
+          password,
+          options: { data: { full_name: fullName, role: role } }
+        });
 
-        const userId = signUpData.user?.id;
-        if (!userId) {
-          // Email confirmation required – show info
-          okEl.textContent = 'Check your email to confirm your account, then sign in.';
-          okEl.style.display = 'block';
+        if (signUpError) {
+          errEl.textContent = 'Sign-up error: ' + signUpError.message;
+          errEl.style.display = 'block';
+          alert('Sign-up error: ' + signUpError.message);
           return;
         }
 
-        // Insert profile
+        const userId = signUpData.user?.id;
+        if (!userId) {
+          // This usually means email confirmation is required
+          okEl.textContent = 'Check your email to confirm your account, then sign in.';
+          okEl.style.display = 'block';
+          alert('Confirmation email sent');
+          return;
+        }
+
+        alert('User created: ' + userId);
+
+        // 2. Insert profile
         const profileRow = {
           id: userId,
           full_name: fullName,
@@ -167,26 +183,43 @@
         };
         const { error: profileError } = await supabase.from('profiles').insert(profileRow);
         if (profileError) {
-          errEl.textContent = 'Account created, but shop code looked invalid: ' + profileError.message;
+          errEl.textContent = 'Profile insert failed: ' + profileError.message;
           errEl.style.display = 'block';
+          alert('Profile insert error: ' + profileError.message);
           return;
         }
 
-        // Success – redirect
+        alert('Profile inserted successfully');
+
+        // 3. Ensure we have a session (if not, sign in)
+        const { data: { session } } = await supabase.auth.getSession();
+        if (!session) {
+          alert('No session after signup – signing in manually');
+          const { error: signInError } = await supabase.auth.signInWithPassword({ email, password });
+          if (signInError) {
+            errEl.textContent = 'Auto-login failed: ' + signInError.message;
+            errEl.style.display = 'block';
+            alert('Auto-login failed: ' + signInError.message);
+            return;
+          }
+        }
+
+        // 4. Redirect
         await routeByRole();
+
       } catch (e) {
         errEl.textContent = 'Unexpected error: ' + e.message;
         errEl.style.display = 'block';
+        alert('Unexpected error: ' + e.message);
       }
     });
 
-    // 7. If already signed in, go to the right dashboard
+    // ========== Auto-redirect if already signed in ==========
     (async () => {
-      try {
-        const { data: { session } } = await supabase.auth.getSession();
-        if (session) await routeByRole();
-      } catch (e) {
-        console.warn('Session check failed:', e);
+      const { data: { session } } = await supabase.auth.getSession();
+      if (session) {
+        alert('Already signed in – redirecting');
+        await routeByRole();
       }
     })();
 
