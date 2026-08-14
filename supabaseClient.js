@@ -2,12 +2,13 @@
 // Fill these in after creating your Supabase project:
 // Supabase Dashboard → Project Settings → API
 // ============================================================
-const SUPABASE_URL = "https://dcbxecrunlbtfwbzkju.supabase.co";
+const SUPABASE_URL = "https://dcbxecruynlbtfwbzkju.supabase.co";
 const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImRjYnhlY3J1eW5sYnRmd2J6a2p1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODY2NTU4NjIsImV4cCI6MjEwMjIzMTg2Mn0.3u1BDWlULCi622FN67zmB2Pgz_607xVov_-qpGMYklA";
 
+// Make supabase global
 var supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
-// ---------- Shared auth helpers, used by every page ----------
+// ---------- Shared auth helpers ----------
 
 async function getCurrentProfile() {
   const { data: { user } } = await supabase.auth.getUser();
@@ -24,7 +25,6 @@ async function getCurrentProfile() {
   return profile;
 }
 
-// Redirects to the right home page based on role. Call this on protected pages.
 async function requireRole(expectedRole) {
   const profile = await getCurrentProfile();
   if (!profile) {
@@ -42,4 +42,6 @@ async function signOut() {
   await supabase.auth.signOut();
   window.location.href = 'index.html';
 }
+
+// Make getCurrentProfile globally accessible
 window.getCurrentProfile = getCurrentProfile;
