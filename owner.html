@@ -13,6 +13,7 @@
 <body>
 <div class="screen">
 
+  <!-- HEADER -->
   <header style="display:flex; justify-content:space-between; align-items:center; padding:16px 20px; border-bottom:1px solid var(--line);">
     <div>
       <div class="brand" style="font-size:26px; font-weight:700;">On<span style="color:#2563eb;">hand</span></div>
@@ -24,12 +25,14 @@
     </div>
   </header>
 
+  <!-- SHOP CODE -->
   <div class="tag-card">
     <span class="tag-label">Your shop code</span>
     <div class="tag-value" id="shopCode" style="font-size:15px; word-break:break-all;">—</div>
     <p class="tag-sub">Give this to a keeper so they can join your shop when they sign up.</p>
   </div>
 
+  <!-- SALES OVERVIEW -->
   <h2 class="section-title">Sales Overview</h2>
   <div style="display:flex; gap:8px; margin-bottom:12px;">
     <button class="btn-secondary period-btn active" data-period="today" style="flex:1; padding:9px;">Today</button>
@@ -51,9 +54,11 @@
     </div>
   </div>
 
+  <!-- ALERTS -->
   <h2 class="section-title">Needs Attention</h2>
   <div id="alertsList"><p class="hint">Checking stock levels…</p></div>
 
+  <!-- ADD SINGLE PRODUCT -->
   <h2 class="section-title">Add a Product</h2>
   <p class="hint">A barcode is generated automatically — print or screenshot the label after saving.</p>
   <div class="tag-card">
@@ -93,11 +98,29 @@
     <button class="btn-primary" id="addProductBtn">Save Product & Generate Barcode</button>
     <div id="newBarcodeArea" style="display:none; margin-top:14px;">
       <div class="barcode-preview"><svg id="newBarcodeSvg"></svg></div>
-      <p class="hint" style="text-align:center; margin-top:0;">Print this label and stick it on the product.</p>
+      <div style="display:flex; gap:10px; margin-top:8px; justify-content:center;">
+        <button class="btn-secondary" id="printSingleLabelBtn" style="font-size:14px;">🖨️ Print Label</button>
+      </div>
+      <p class="hint" style="text-align:center; margin-top:4px;">Print this label and stick it on the product.</p>
     </div>
   </div>
 
-  <h2 class="section-title">Your Products</h2>
+  <!-- BATCH UPLOAD (CSV) -->
+  <h2 class="section-title">Batch Upload (CSV)</h2>
+  <p class="hint">Add many products at once. Format: <code>name, unit, cost_price, selling_price, current_stock, low_stock_threshold</code>. <br> Example: <code>Sugar, kg, 90, 105, 50, 5</code> <br> If your product name contains a comma, wrap it in quotes: <code>"Sugar, white", kg, 90, 105, 50, 5</code></p>
+  <div class="tag-card">
+    <div style="display:flex; gap:8px; flex-wrap:wrap; align-items:center;">
+      <input type="file" id="csvFileInput" accept=".csv" style="flex:1; padding:8px; border:1px solid var(--line); border-radius:6px;">
+      <button class="btn-primary" id="uploadCsvBtn">Upload & Save</button>
+    </div>
+    <div id="csvStatus" style="margin-top:10px; font-size:14px;"></div>
+  </div>
+
+  <!-- PRODUCT LIST WITH PRINT ALL -->
+  <div style="display:flex; justify-content:space-between; align-items:center; margin-top:24px; margin-bottom:8px;">
+    <h2 class="section-title" style="margin:0;">Your Products</h2>
+    <button class="btn-secondary" id="printAllBarcodesBtn" style="font-size:13px; padding:6px 14px;">🖨️ Print All</button>
+  </div>
   <div id="productList"><p class="hint">Loading products…</p></div>
 
 </div>
@@ -178,7 +201,10 @@
             <div class="name">${escapeHtml(p.name)}</div>
             <div class="meta">${p.current_stock} ${p.unit} in stock</div>
           </div>
-          <span class="stock-flag ${low ? 'low' : 'ok'}">${low ? 'Low' : 'OK'}</span>
+          <div style="display:flex; align-items:center; gap:8px;">
+            <span class="stock-flag ${low ? 'low' : 'ok'}">${low ? 'Low' : 'OK'}</span>
+            <button class="btn-secondary" style="padding:4px 10px; font-size:12px;" onclick="printSingleBarcode('${p.barcode}', '${escapeHtml(p.name)}', '${p.selling_price}')">🖨️</button>
+          </div>
         </div>`;
     }).join('');
   }
@@ -203,10 +229,115 @@
     return d.innerHTML;
   }
 
+  // ----- UNIQUE BARCODE GENERATOR (collision-safe, uses crypto.randomUUID) -----
   function generateBarcodeValue(){
-    return 'ONHAND' + Date.now().toString().slice(-9);
+    if (window.crypto && crypto.randomUUID) {
+      return 'ONHAND' + crypto.randomUUID().replace(/-/g,'').slice(0,12).toUpperCase();
+    }
+    // Fallback for older browsers (rare)
+    return 'ONHAND' + Date.now().toString(36).toUpperCase() + Math.random().toString(36).slice(2,8).toUpperCase();
   }
 
+  // ----- CSV PARSER (handles quoted fields) -----
+  function parseCSVLine(line) {
+    // Matches fields: either quoted "text" or plain text, separated by commas
+    const matches = line.match(/(".*?"|[^,]+)(?=\s*,|\s*$)/g);
+    if (!matches) return [];
+    return matches.map(m => m.replace(/^"|"$/g, '').trim());
+  }
+
+  // ===== PRINT FUNCTIONS =====
+  window.printSingleBarcode = function(barcode, name, price) {
+    const win = window.open('', '_blank');
+    if (!win) {
+      alert('Pop-up blocked. Please allow pop-ups for this site, or tap the print icon again.');
+      return;
+    }
+    win.document.write(`
+      <html>
+        <head>
+          <title>Print Barcode</title>
+          <script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.6/dist/JsBarcode.all.min.js"><\/script>
+          <style>
+            body { display:flex; justify-content:center; align-items:center; height:100vh; margin:0; font-family: sans-serif; flex-direction:column; }
+            .label { text-align:center; padding:20px; border:1px solid #ddd; border-radius:8px; }
+            .name { font-size:18px; font-weight:bold; margin-top:8px; }
+            .price { font-size:14px; color:#555; }
+            @media print { body { margin:0; padding:0; } .no-print { display:none; } }
+          </style>
+        </head>
+        <body>
+          <div class="label">
+            <svg id="barcode"></svg>
+            <div class="name">${name}</div>
+            <div class="price">${price} Birr</div>
+          </div>
+          <div class="no-print" style="margin-top:20px;">
+            <button onclick="window.print()" style="padding:10px 20px; font-size:16px;">🖨️ Print</button>
+            <button onclick="window.close()" style="padding:10px 20px; font-size:16px; margin-left:10px;">Close</button>
+          </div>
+          <script>
+            JsBarcode("#barcode", "${barcode}", { format: "CODE128", height: 80, displayValue: true, fontSize: 16 });
+          <\/script>
+        </body>
+      </html>
+    `);
+    win.document.close();
+  };
+
+  window.printAllBarcodes = function() {
+    if (!allProducts.length) { alert('No products to print.'); return; }
+    const win = window.open('', '_blank');
+    if (!win) {
+      alert('Pop-up blocked. Please allow pop-ups for this site, or tap the print icon again.');
+      return;
+    }
+    
+    let itemsHtml = allProducts.map(p => `
+      <div class="label">
+        <svg class="barcode-svg" data-barcode="${p.barcode}"></svg>
+        <div class="name">${escapeHtml(p.name)}</div>
+        <div class="price">${p.selling_price} Birr</div>
+      </div>
+    `).join('');
+
+    win.document.write(`
+      <html>
+        <head>
+          <title>Print All Barcodes</title>
+          <script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.6/dist/JsBarcode.all.min.js"><\/script>
+          <style>
+            body { font-family: sans-serif; padding: 20px; }
+            .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 20px; }
+            .label { text-align:center; padding:15px; border:1px solid #ccc; border-radius:6px; page-break-inside: avoid; }
+            .name { font-size:14px; font-weight:bold; margin-top:6px; }
+            .price { font-size:12px; color:#555; }
+            .controls { text-align:center; margin-bottom:20px; }
+            @media print { .controls { display:none; } }
+          </style>
+        </head>
+        <body>
+          <div class="controls">
+            <button onclick="window.print()" style="padding:10px 30px; font-size:16px;">🖨️ Print All</button>
+            <button onclick="window.close()" style="padding:10px 30px; font-size:16px; margin-left:10px;">Close</button>
+          </div>
+          <div class="grid">
+            ${itemsHtml}
+          </div>
+          <script>
+            document.querySelectorAll('.barcode-svg').forEach(el => {
+              JsBarcode(el, el.dataset.barcode, { format: "CODE128", height: 50, displayValue: true, fontSize: 12 });
+            });
+          <\/script>
+        </body>
+      </html>
+    `);
+    win.document.close();
+  };
+
+  document.getElementById('printAllBarcodesBtn').addEventListener('click', window.printAllBarcodes);
+
+  // ===== ADD SINGLE PRODUCT =====
   document.getElementById('addProductBtn').addEventListener('click', async () => {
     const name = document.getElementById('pName').value.trim();
     const unit = document.getElementById('pUnit').value;
@@ -230,8 +361,14 @@
     if (error){ alert('Could not save product: ' + error.message); return; }
 
     // Show barcode preview
-    document.getElementById('newBarcodeArea').style.display = 'block';
+    const area = document.getElementById('newBarcodeArea');
+    area.style.display = 'block';
     JsBarcode('#newBarcodeSvg', barcode, { format: 'CODE128', height: 60, displayValue: true, fontSize: 12 });
+
+    // Store barcode for print button
+    document.getElementById('printSingleLabelBtn').onclick = function() {
+      window.printSingleBarcode(barcode, name, price);
+    };
 
     // Clear form fields
     document.getElementById('pName').value = '';
@@ -242,6 +379,107 @@
     await loadProducts();
   });
 
+  // ===== BATCH UPLOAD (CSV) =====
+  document.getElementById('uploadCsvBtn').addEventListener('click', async () => {
+    const fileInput = document.getElementById('csvFileInput');
+    const status = document.getElementById('csvStatus');
+    status.textContent = 'Reading file...';
+    status.style.color = '#555';
+
+    if (!fileInput.files.length) {
+      status.textContent = 'Please select a CSV file.';
+      status.style.color = 'red';
+      return;
+    }
+
+    const file = fileInput.files[0];
+    const text = await file.text();
+    const lines = text.split('\n').filter(line => line.trim() !== '');
+    if (lines.length < 2) {
+      status.textContent = 'CSV must have a header row and at least one product row.';
+      status.style.color = 'red';
+      return;
+    }
+
+    // Parse header using the CSV parser
+    const headers = parseCSVLine(lines[0]).map(h => h.toLowerCase());
+    const expected = ['name', 'unit', 'cost_price', 'selling_price', 'current_stock', 'low_stock_threshold'];
+    const isValid = expected.every(e => headers.includes(e));
+    if (!isValid) {
+      status.textContent = `Invalid headers. Expected: ${expected.join(', ')}`;
+      status.style.color = 'red';
+      return;
+    }
+
+    const products = [];
+    const skippedRows = [];
+    for (let i = 1; i < lines.length; i++) {
+      const cols = parseCSVLine(lines[i]);
+      if (cols.length < headers.length) {
+        skippedRows.push(`Row ${i+1}: not enough columns (${cols.length} vs ${headers.length})`);
+        continue;
+      }
+      const row = {};
+      headers.forEach((h, idx) => { row[h] = cols[idx] || ''; });
+      
+      if (!row.name) {
+        skippedRows.push(`Row ${i+1}: missing name`);
+        continue;
+      }
+      
+      products.push({
+        owner_id: profile.id,
+        name: row.name,
+        unit: row.unit || 'piece',
+        cost_price: parseFloat(row.cost_price) || 0,
+        selling_price: parseFloat(row.selling_price) || 0,
+        current_stock: parseFloat(row.current_stock) || 0,
+        low_stock_threshold: parseFloat(row.low_stock_threshold) || 5,
+        barcode: generateBarcodeValue() // unique per product
+      });
+    }
+
+    if (skippedRows.length) {
+      status.textContent = `⚠️ ${skippedRows.length} rows skipped: ${skippedRows.join('; ')}`;
+      status.style.color = 'orange';
+    }
+
+    if (!products.length) {
+      status.textContent = 'No valid products to upload.';
+      status.style.color = 'red';
+      return;
+    }
+
+    status.textContent = `Uploading ${products.length} products...`;
+    status.style.color = '#555';
+
+    // Insert in batches of 50, continue on error
+    const batchSize = 50;
+    let successCount = 0;
+    const errorBatches = [];
+
+    for (let i = 0; i < products.length; i += batchSize) {
+      const batch = products.slice(i, i + batchSize);
+      const { error } = await supabase.from('products').insert(batch);
+      if (error) {
+        errorBatches.push(`Batch ${Math.floor(i/batchSize)+1}: ${error.message}`);
+        continue;
+      }
+      successCount += batch.length;
+    }
+
+    if (errorBatches.length) {
+      status.textContent = `⚠️ ${successCount} added, but errors: ${errorBatches.join('; ')}`;
+      status.style.color = 'orange';
+    } else {
+      status.textContent = `✅ Successfully added ${successCount} products!`;
+      status.style.color = 'green';
+    }
+    fileInput.value = '';
+    await loadProducts();
+  });
+
+  // ===== ON LOAD =====
   (async () => {
     profile = await requireRole('owner');
     if (!profile) return;
