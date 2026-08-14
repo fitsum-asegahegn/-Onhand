@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Duka — Scan & Sell</title>
+<title>Onhand — Scan & Sell</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="style.css">
@@ -11,23 +11,25 @@
 <script src="https://cdn.jsdelivr.net/npm/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
 </head>
 <body>
-<header style="display:flex; justify-content:space-between; align-items:center; padding:16px 20px; border-bottom:1px solid var(--line);">
-  <div>
-    <div class="brand" style="font-size:26px; font-weight:700;">On<span style="color:#2563eb;">hand</span></div>
-   <div style="font-size:10px; color:var(--ink-soft); letter-spacing:0.05em;">በእጄ</div>
-  </div>
-  <div style="display:flex; align-items:center; gap:12px;">
-    <span style="font-size:12px; text-transform:uppercase; color:var(--ink-soft);">Keeper</span>
-    <button onclick="signOut()" style="background:none; border:1px solid #ddd; padding:6px 14px; border-radius:6px; font-size:14px; cursor:pointer;">Sign out</button>
-  </div>
-</header>
+<div class="screen">
+
+  <header style="display:flex; justify-content:space-between; align-items:center; padding:16px 20px; border-bottom:1px solid var(--line);">
+    <div>
+      <div class="brand" style="font-size:26px; font-weight:700;">On<span style="color:#2563eb;">hand</span></div>
+      <div style="font-size:10px; color:var(--ink-soft); letter-spacing:0.05em;">በእጄ</div>
+    </div>
+    <div style="display:flex; align-items:center; gap:12px;">
+      <span style="font-size:12px; text-transform:uppercase; color:var(--ink-soft);">Keeper</span>
+      <button onclick="signOut()" style="background:none; border:1px solid #ddd; padding:6px 14px; border-radius:6px; font-size:14px; cursor:pointer;">Sign out</button>
+    </div>
+  </header>
 
   <button class="scan-button" id="startScanBtn">
     📷 Scan a Product
     <span class="sub">Tap to open the camera</span>
   </button>
 
-  <div id="reader" style="display:none;"></div>
+  <div id="reader" style="display:none; margin:10px 0;"></div>
   <button class="btn-secondary" id="stopScanBtn" style="display:none; margin-bottom:16px;">Cancel Scan</button>
 
   <div class="tag-card" id="saleCard" style="display:none;">
@@ -65,27 +67,33 @@
   let html5QrCode = null;
   let currentProduct = null;
 
-  function showToast(msg){
+  function showToast(msg, isError = false) {
     const area = document.getElementById('toastArea');
     const el = document.createElement('div');
-    el.className = 'toast';
+    el.className = 'toast' + (isError ? ' error' : '');
     el.textContent = msg;
     area.appendChild(el);
-    setTimeout(() => el.remove(), 2600);
+    setTimeout(() => el.remove(), 3000);
   }
 
-  async function lookupProduct(barcode){
-    const { data, error } = await supabase
-      .from('products')
-      .select('id, name, unit, selling_price, current_stock')
-      .eq('owner_id', profile.owner_id)
-      .eq('barcode', barcode)
-      .maybeSingle();
-    if (error) { console.error(error); return null; }
-    return data;
+  async function lookupProduct(barcode) {
+    try {
+      const { data, error } = await supabase
+        .from('products')
+        .select('id, name, unit, selling_price, current_stock')
+        .eq('owner_id', profile.owner_id)
+        .eq('barcode', barcode)
+        .maybeSingle();
+      if (error) throw error;
+      return data;
+    } catch (e) {
+      console.error('lookup error:', e);
+      showToast('Error looking up product: ' + e.message, true);
+      return null;
+    }
   }
 
-  function openSaleCard(product){
+  function openSaleCard(product) {
     currentProduct = product;
     document.getElementById('saleProductName').textContent = product.name;
     document.getElementById('saleUnitPrice').textContent =
@@ -94,41 +102,48 @@
     document.getElementById('saleCard').style.display = 'block';
   }
 
-  function closeSaleCard(){
+  function closeSaleCard() {
     currentProduct = null;
     document.getElementById('saleCard').style.display = 'none';
   }
 
-  async function onScanSuccess(decodedText){
-    await stopScanner();
+  // Called when a barcode is successfully decoded
+  async function onScanSuccess(decodedText) {
+    await stopScanner(); // close camera
     const product = await lookupProduct(decodedText);
-    if (!product){
-      showToast("That barcode isn't in your shop's catalog.");
+    if (!product) {
+      showToast("That barcode isn't in your shop's catalog.", true);
+      // Offer to scan again
+      document.getElementById('startScanBtn').style.display = 'block';
       return;
     }
     openSaleCard(product);
   }
 
-  async function startScanner(){
-    document.getElementById('reader').style.display = 'block';
-    document.getElementById('stopScanBtn').style.display = 'block';
-    document.getElementById('startScanBtn').style.display = 'none';
-    html5QrCode = new Html5Qrcode("reader");
+  async function startScanner() {
     try {
+      document.getElementById('reader').style.display = 'block';
+      document.getElementById('stopScanBtn').style.display = 'block';
+      document.getElementById('startScanBtn').style.display = 'none';
+
+      html5QrCode = new Html5Qrcode("reader");
       await html5QrCode.start(
         { facingMode: "environment" },
-        { fps: 10, qrbox: 220 },
+        { fps: 10, qrbox: { width: 250, height: 250 } },
         onScanSuccess
       );
     } catch (e) {
-      showToast("Couldn't open the camera. Check permissions.");
+      showToast("Couldn't open camera. Check permissions.", true);
       await stopScanner();
     }
   }
 
-  async function stopScanner(){
-    if (html5QrCode){
-      try { await html5QrCode.stop(); html5QrCode.clear(); } catch(e){}
+  async function stopScanner() {
+    if (html5QrCode) {
+      try {
+        await html5QrCode.stop();
+        await html5QrCode.clear();
+      } catch (e) {}
       html5QrCode = null;
     }
     document.getElementById('reader').style.display = 'none';
@@ -136,54 +151,88 @@
     document.getElementById('startScanBtn').style.display = 'block';
   }
 
+  // ----- Event listeners -----
   document.getElementById('startScanBtn').addEventListener('click', startScanner);
   document.getElementById('stopScanBtn').addEventListener('click', stopScanner);
-  document.getElementById('cancelSaleBtn').addEventListener('click', closeSaleCard);
+  document.getElementById('cancelSaleBtn').addEventListener('click', () => {
+    closeSaleCard();
+    // Show scan button again
+    document.getElementById('startScanBtn').style.display = 'block';
+  });
 
   document.getElementById('confirmSaleBtn').addEventListener('click', async () => {
     if (!currentProduct) return;
     const qty = parseFloat(document.getElementById('saleQty').value);
-    if (!qty || qty <= 0){ showToast('Enter a valid quantity.'); return; }
+    if (!qty || qty <= 0) {
+      showToast('Enter a valid quantity.', true);
+      return;
+    }
 
-    // Need cost_price for the profit snapshot, but the keeper's UI never displays it.
-    const { data: full, error: fetchErr } = await supabase
-      .from('products')
-      .select('cost_price, selling_price')
-      .eq('id', currentProduct.id)
-      .single();
-    if (fetchErr){ showToast('Could not complete sale.'); return; }
+    try {
+      // Fetch cost price (keeper never sees it)
+      const { data: full, error: fetchErr } = await supabase
+        .from('products')
+        .select('cost_price, selling_price')
+        .eq('id', currentProduct.id)
+        .single();
+      if (fetchErr) throw fetchErr;
 
-    const { error } = await supabase.from('sales').insert({
-      owner_id: profile.owner_id,
-      product_id: currentProduct.id,
-      sold_by: profile.id,
-      quantity: qty,
-      unit_price_at_sale: full.selling_price,
-      cost_price_at_sale: full.cost_price
-    });
-    if (error){ showToast('Could not complete sale: ' + error.message); return; }
+      const { error } = await supabase.from('sales').insert({
+        owner_id: profile.owner_id,
+        product_id: currentProduct.id,
+        sold_by: profile.id,
+        quantity: qty,
+        unit_price_at_sale: full.selling_price,
+        cost_price_at_sale: full.cost_price
+      });
+      if (error) throw error;
 
-    showToast(`✅ Sold ${qty} ${currentProduct.unit} of ${currentProduct.name}`);
-    closeSaleCard();
+      showToast(`✅ Sold ${qty} ${currentProduct.unit} of ${currentProduct.name}`);
+      closeSaleCard();
+      // Allow scanning again
+      document.getElementById('startScanBtn').style.display = 'block';
+    } catch (e) {
+      showToast('Sale failed: ' + e.message, true);
+    }
   });
 
   document.getElementById('logMissedBtn').addEventListener('click', async () => {
     const name = document.getElementById('missedName').value.trim();
-    if (!name){ showToast('Enter what the customer asked for.'); return; }
-    const { error } = await supabase.from('missed_sales').insert({
-      owner_id: profile.owner_id,
-      product_name_free_text: name,
-      reported_by: profile.id
-    });
-    if (error){ showToast('Could not log it: ' + error.message); return; }
-    document.getElementById('missedName').value = '';
-    showToast('Logged — thanks!');
+    if (!name) {
+      showToast('Enter what the customer asked for.', true);
+      return;
+    }
+    try {
+      const { error } = await supabase.from('missed_sales').insert({
+        owner_id: profile.owner_id,
+        product_name_free_text: name,
+        reported_by: profile.id
+      });
+      if (error) throw error;
+      document.getElementById('missedName').value = '';
+      showToast('📝 Logged — thanks!');
+    } catch (e) {
+      showToast('Could not log: ' + e.message, true);
+    }
   });
 
-  document.getElementById('signOutBtn').addEventListener('click', signOut);
-
+  // On load
   (async () => {
     profile = await requireRole('keeper');
+    if (!profile) {
+      // requireRole already redirects if not keeper
+      return;
+    }
+    // If the owner_id is missing, show error
+    if (!profile.owner_id) {
+      document.querySelector('.screen').innerHTML = `
+        <div style="padding:40px; text-align:center; color:red;">
+          <p>⚠️ This keeper account is not linked to a shop.</p>
+          <p>Please contact your shop owner for the correct shop code and sign up again.</p>
+          <button onclick="signOut()" class="btn-primary" style="margin-top:20px;">Sign out</button>
+        </div>
+      `;
+    }
   })();
 </script>
 </body>
