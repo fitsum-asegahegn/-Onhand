@@ -37,3 +37,4 @@ async function signOut() {
 }
 
 window.getCurrentProfile = getCurrentProfile;
+window.signOut = signOut;
