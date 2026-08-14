@@ -1,4 +1,4 @@
-# Duka — Shop Ledger (MVP)
+# በእጄ — Shop Ledger (MVP)
 
 A phone-first tool for a shop owner to track sales, stock, and profit remotely, and for a keeper to scan and sell without ever seeing cost prices or margins.
 
