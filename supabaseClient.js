@@ -42,3 +42,4 @@ async function signOut() {
   await supabase.auth.signOut();
   window.location.href = 'index.html';
 }
+window.getCurrentProfile = getCurrentProfile;
