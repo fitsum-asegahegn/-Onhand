@@ -1,159 +1,163 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Duka — Sign In</title>
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="style.css">
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Duka — Shop Ledger</title>
+  <link rel="stylesheet" href="style.css" />
 </head>
 <body>
-<div class="screen">
+  <div class="container">
+    <h1>Duka</h1>
+    <p class="subtitle">Track sales and stock, even when you're not there.</p>
 
-  <div style="text-align:center; margin:40px 0 30px;">
-    <div class="brand" style="font-size:28px;">Duk<span>a</span></div>
-    <p class="hint" style="margin-top:6px;">Track sales and stock, even when you're not there.</p>
+    <!-- SIGN IN FORM -->
+    <div id="signin-form">
+      <h2>Sign In</h2>
+      <input type="email" id="login-email" placeholder="Email" />
+      <input type="password" id="login-password" placeholder="Password" />
+      <button id="login-btn">Sign In</button>
+      <p class="toggle-link">New here? <a href="#" id="show-signup">Create an account</a></p>
+    </div>
+
+    <!-- SIGN UP FORM -->
+    <div id="signup-form" style="display:none;">
+      <h2>Create Account</h2>
+      <input type="text" id="signup-name" placeholder="Full Name" />
+      <input type="email" id="signup-email" placeholder="Email" />
+      <input type="password" id="signup-password" placeholder="Password (min 6 chars)" />
+      <select id="signup-role">
+        <option value="owner">Shop Owner</option>
+        <option value="keeper">Shop Keeper</option>
+      </select>
+      <button id="signup-btn">Sign Up</button>
+      <p class="toggle-link">Already have an account? <a href="#" id="show-signin">Sign In</a></p>
+    </div>
+
+    <div id="error-msg" class="error" style="display:none;"></div>
   </div>
 
-  <div class="tag-card" id="signInCard">
-    <h2 class="section-title" style="margin-top:0;">Sign In</h2>
-    <div class="field">
-      <label for="siEmail">Email</label>
-      <input type="email" id="siEmail" autocomplete="email">
-    </div>
-    <div class="field">
-      <label for="siPassword">Password</label>
-      <input type="password" id="siPassword" autocomplete="current-password">
-    </div>
-    <button class="btn-primary" id="signInBtn">Sign In</button>
-    <p id="siError" style="color:var(--bad); font-size:12.5px; margin-top:10px; display:none;"></p>
-  </div>
+  <!-- Load Supabase CDN -->
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  
+  <!-- Your config -->
+  <script src="supabaseClient.js"></script>
 
-  <p style="text-align:center; margin:22px 0;">
-    <button class="btn-link" id="toggleSignup">New here? Create an account</button>
-  </p>
+  <!-- Page logic -->
+  <script>
+    // DOM refs
+    const signinForm = document.getElementById('signin-form');
+    const signupForm = document.getElementById('signup-form');
+    const errorMsg = document.getElementById('error-msg');
 
-  <div class="tag-card" id="signUpCard" style="display:none;">
-    <h2 class="section-title" style="margin-top:0;">Create Account</h2>
-
-    <fieldset style="border:1px solid var(--line); border-radius:8px; padding:12px 14px; margin-bottom:16px;">
-      <legend style="font-size:11px; text-transform:uppercase; letter-spacing:.06em; color:var(--ink-soft); padding:0 4px;">I am a...</legend>
-      <label style="display:flex; align-items:center; gap:8px; font-size:14px; margin-top:8px; cursor:pointer;">
-        <input type="radio" name="signupRole" value="owner" checked> Shop owner — setting up my shop
-      </label>
-      <label style="display:flex; align-items:center; gap:8px; font-size:14px; margin-top:8px; cursor:pointer;">
-        <input type="radio" name="signupRole" value="keeper"> Keeper — I have a shop code
-      </label>
-    </fieldset>
-
-    <div class="field">
-      <label for="suName">Your name</label>
-      <input type="text" id="suName">
-    </div>
-    <div class="field" id="shopCodeField" style="display:none;">
-      <label for="suShopCode">Shop code</label>
-      <input type="text" id="suShopCode" placeholder="Ask the owner for this">
-    </div>
-    <div class="field">
-      <label for="suEmail">Email</label>
-      <input type="email" id="suEmail" autocomplete="email">
-    </div>
-    <div class="field">
-      <label for="suPassword">Password</label>
-      <input type="password" id="suPassword" autocomplete="new-password">
-    </div>
-    <button class="btn-primary" id="signUpBtn">Create Account</button>
-    <p id="suError" style="color:var(--bad); font-size:12.5px; margin-top:10px; display:none;"></p>
-    <p id="suSuccess" style="color:var(--good); font-size:12.5px; margin-top:10px; display:none;"></p>
-  </div>
-
-</div>
-
-<script src="supabaseClient.js"></script>
-<script>
-  const toggleSignup = document.getElementById('toggleSignup');
-  const signInCard = document.getElementById('signInCard');
-  const signUpCard = document.getElementById('signUpCard');
-  toggleSignup.addEventListener('click', () => {
-    const showingSignup = signUpCard.style.display !== 'none';
-    signUpCard.style.display = showingSignup ? 'none' : 'block';
-    signInCard.style.display = showingSignup ? 'block' : 'none';
-    toggleSignup.textContent = showingSignup ? 'New here? Create an account' : 'Already have an account? Sign in';
-  });
-
-  document.querySelectorAll('input[name="signupRole"]').forEach(el => {
-    el.addEventListener('change', () => {
-      document.getElementById('shopCodeField').style.display =
-        document.querySelector('input[name="signupRole"]:checked').value === 'keeper' ? 'block' : 'none';
+    // Show sign-up form
+    document.getElementById('show-signup').addEventListener('click', (e) => {
+      e.preventDefault();
+      signinForm.style.display = 'none';
+      signupForm.style.display = 'block';
+      errorMsg.style.display = 'none';
     });
-  });
 
-  async function routeByRole() {
-    const profile = await getCurrentProfile();
-    if (!profile) return;
-    window.location.href = profile.role === 'owner' ? 'owner.html' : 'keeper.html';
-  }
+    // Show sign-in form
+    document.getElementById('show-signin').addEventListener('click', (e) => {
+      e.preventDefault();
+      signupForm.style.display = 'none';
+      signinForm.style.display = 'block';
+      errorMsg.style.display = 'none';
+    });
 
-  document.getElementById('signInBtn').addEventListener('click', async () => {
-    const email = document.getElementById('siEmail').value.trim();
-    const password = document.getElementById('siPassword').value;
-    const errEl = document.getElementById('siError');
-    errEl.style.display = 'none';
-    const { error } = await supabase.auth.signInWithPassword({ email, password });
-    if (error) { errEl.textContent = error.message; errEl.style.display = 'block'; return; }
-    await routeByRole();
-  });
+    // Sign Up
+    document.getElementById('signup-btn').addEventListener('click', async () => {
+      const fullName = document.getElementById('signup-name').value.trim();
+      const email = document.getElementById('signup-email').value.trim();
+      const password = document.getElementById('signup-password').value;
+      const role = document.getElementById('signup-role').value;
 
-  document.getElementById('signUpBtn').addEventListener('click', async () => {
-    const role = document.querySelector('input[name="signupRole"]:checked').value;
-    const fullName = document.getElementById('suName').value.trim();
-    const shopCode = document.getElementById('suShopCode').value.trim();
-    const email = document.getElementById('suEmail').value.trim();
-    const password = document.getElementById('suPassword').value;
-    const errEl = document.getElementById('suError');
-    const okEl = document.getElementById('suSuccess');
-    errEl.style.display = 'none'; okEl.style.display = 'none';
+      if (!fullName || !email || !password) {
+        showError('Please fill in all fields.');
+        return;
+      }
+      if (password.length < 6) {
+        showError('Password must be at least 6 characters.');
+        return;
+      }
 
-    if (!fullName || !email || !password) {
-      errEl.textContent = 'Please fill in all fields.'; errEl.style.display = 'block'; return;
+      try {
+        // 1. Sign up with Supabase Auth
+        const { data, error } = await supabase.auth.signUp({
+          email,
+          password,
+          options: {
+            data: { full_name: fullName, role: role }
+          }
+        });
+
+        if (error) throw error;
+
+        // 2. Create a profile record (if not automatically created via trigger)
+        // The schema expects a profiles row, so we insert one.
+        const { error: profileError } = await supabase
+          .from('profiles')
+          .insert([{
+            id: data.user.id,
+            full_name: fullName,
+            role: role,
+            owner_id: role === 'keeper' ? null : null // keeper must be assigned later by owner
+          }]);
+
+        if (profileError) throw profileError;
+
+        // Redirect based on role
+        if (role === 'owner') {
+          window.location.href = 'owner.html';
+        } else {
+          window.location.href = 'keeper.html';
+        }
+      } catch (err) {
+        showError(err.message || 'Sign-up failed. Please try again.');
+      }
+    });
+
+    // Sign In
+    document.getElementById('login-btn').addEventListener('click', async () => {
+      const email = document.getElementById('login-email').value.trim();
+      const password = document.getElementById('login-password').value;
+
+      if (!email || !password) {
+        showError('Please enter email and password.');
+        return;
+      }
+
+      try {
+        const { data, error } = await supabase.auth.signInWithPassword({
+          email,
+          password
+        });
+        if (error) throw error;
+
+        // Fetch profile to know role
+        const { data: profile, error: pError } = await supabase
+          .from('profiles')
+          .select('role')
+          .eq('id', data.user.id)
+          .single();
+
+        if (pError) throw pError;
+
+        if (profile.role === 'owner') {
+          window.location.href = 'owner.html';
+        } else {
+          window.location.href = 'keeper.html';
+        }
+      } catch (err) {
+        showError(err.message || 'Login failed. Check your credentials.');
+      }
+    });
+
+    function showError(msg) {
+      errorMsg.textContent = msg;
+      errorMsg.style.display = 'block';
     }
-    if (role === 'keeper' && !shopCode) {
-      errEl.textContent = 'Ask your shop owner for the shop code.'; errEl.style.display = 'block'; return;
-    }
-
-    const { data: signUpData, error: signUpError } = await supabase.auth.signUp({ email, password });
-    if (signUpError) { errEl.textContent = signUpError.message; errEl.style.display = 'block'; return; }
-
-    const userId = signUpData.user?.id;
-    if (!userId) {
-      okEl.textContent = 'Check your email to confirm your account, then sign in.';
-      okEl.style.display = 'block';
-      return;
-    }
-
-    const profileRow = {
-      id: userId,
-      full_name: fullName,
-      role: role,
-      owner_id: role === 'keeper' ? shopCode : null
-    };
-    const { error: profileError } = await supabase.from('profiles').insert(profileRow);
-    if (profileError) {
-      errEl.textContent = 'Account created, but shop code looked invalid: ' + profileError.message;
-      errEl.style.display = 'block';
-      return;
-    }
-
-    await routeByRole();
-  });
-
-  // If already signed in, skip straight to the right home screen
-  (async () => {
-    const { data: { session } } = await supabase.auth.getSession();
-    if (session) await routeByRole();
-  })();
-</script>
+  </script>
 </body>
 </html>
