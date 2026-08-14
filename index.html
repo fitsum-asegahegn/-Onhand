@@ -114,7 +114,7 @@
       window.location.href = profile.role === 'owner' ? 'owner.html' : 'keeper.html';
     });
 
-    // Sign Up
+    // ========== SIGN UP – FIXED ORDER ==========
     document.getElementById('signUpBtn').addEventListener('click', async function() {
       const role = document.querySelector('input[name="signupRole"]:checked').value;
       const fullName = document.getElementById('suName').value.trim();
@@ -137,6 +137,7 @@
       }
 
       try {
+        // 1. Sign up
         const { data, error } = await supabase.auth.signUp({
           email,
           password,
@@ -151,6 +152,18 @@
           return;
         }
 
+        // 2. Ensure we have a session (sign in if needed)
+        const { data: { session } } = await supabase.auth.getSession();
+        if (!session) {
+          const { error: signInError } = await supabase.auth.signInWithPassword({ email, password });
+          if (signInError) {
+            errEl.textContent = 'Auto-login failed: ' + signInError.message;
+            errEl.style.display = 'block';
+            return;
+          }
+        }
+
+        // 3. Now insert the profile (session is active, RLS will allow it)
         const { error: profileError } = await supabase
           .from('profiles')
           .insert({ id: userId, full_name: fullName, role, owner_id: role === 'keeper' ? shopCode : null });
@@ -162,18 +175,7 @@
           return;
         }
 
-        // Ensure session
-        const { data: { session } } = await supabase.auth.getSession();
-        if (!session) {
-          const { error: signInError } = await supabase.auth.signInWithPassword({ email, password });
-          if (signInError) {
-            errEl.textContent = 'Auto-login failed: ' + signInError.message;
-            errEl.style.display = 'block';
-            return;
-          }
-        }
-
-        // Redirect directly using the role (skip fetch)
+        // 4. Redirect directly using the role
         window.location.href = role === 'owner' ? 'owner.html' : 'keeper.html';
 
       } catch (e) {
