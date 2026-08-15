@@ -1,0 +1,50 @@
+
+/* ============================================================
+   LAYOUT FIXES — append to the end of style.css
+   ============================================================ */
+
+/* Text inputs have an invisible default min-width that ignores flexbox
+   shrinking. In a flex row (like the barcode "type the code" + Find
+   button), this pushes sibling elements out past the card instead of
+   the input shrinking — which is what pushed the Find/ፈልግ button past
+   the card edge. This is a standard, safe reset with no side effects. */
+input, select, textarea { min-width: 0; }
+
+/* JsBarcode renders its SVG at a fixed pixel width based on the code's
+   length, with nothing telling it to ever shrink — so a long code like
+   ONHANDB6467F184BB4 renders wider than its card and spills past the
+   rounded border to the edge of the screen. Constraining the SVG to
+   the container width lets it scale down proportionally instead. */
+.barcode-preview{ overflow:hidden; }
+.barcode-preview svg{ max-width:100%; height:auto; display:block; margin:0 auto; }
+
+/* ---------- Print label ---------- */
+/* Two print modes, distinguished by a body class toggled right before
+   window.print(): single-label (Add Product / Details / quick-print) vs
+   print-all (a grid of every product's label on one sheet). Without this
+   split, an open Details panel's barcode and the print-all grid would
+   both try to render fixed-position at the same spot simultaneously. */
+#printAllArea{ display:none; }
+
+@media print {
+  body *{ visibility:hidden; }
+
+  body:not(.print-all-mode) .print-area,
+  body:not(.print-all-mode) .print-area *{ visibility:visible; }
+  body:not(.print-all-mode) .print-area{
+    display:block; position:fixed; top:0; left:0; width:100%; text-align:center; padding-top:30px;
+  }
+  .print-area .print-product-name{
+    font-family:var(--display); font-weight:700; font-size:20px; margin-bottom:10px;
+  }
+
+  body.print-all-mode #printAllArea,
+  body.print-all-mode #printAllArea *{ visibility:visible; }
+  body.print-all-mode #printAllArea{
+    display:block; position:fixed; top:0; left:0; width:100%; padding:24px;
+  }
+  .print-label-grid{ display:grid; grid-template-columns:repeat(auto-fill, minmax(170px,1fr)); gap:16px; }
+  .print-label{ text-align:center; padding:10px; border:1px solid #ccc; border-radius:6px; page-break-inside:avoid; }
+  .print-label .print-product-name{ font-family:var(--display); font-weight:700; font-size:13px; margin:4px 0 2px; }
+  .print-label .print-product-price{ font-size:11px; color:#555; }
+}

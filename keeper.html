@@ -293,6 +293,14 @@
     const qty = parseFloat(document.getElementById('saleQty').value);
     if (!qty || qty <= 0) { showToast(t('enterValidQuantity'), true); return; }
 
+    // Guard against double-tap: on a slow connection it's easy to tap
+    // Confirm Sale twice before the first request finishes, which was a
+    // real source of duplicate sales (and stock dropping further than
+    // it should have).
+    const btn = document.getElementById('confirmSaleBtn');
+    if (btn.disabled) return;
+    btn.disabled = true;
+
     const salePayload = {
       owner_id: profile.owner_id,
       product_id: currentProduct.id,
@@ -308,6 +316,7 @@
         if (error) throw error;
         showToast('✅ ' + t('saleRecorded') + ': ' + qty + ' ' + currentProduct.unit + ' — ' + currentProduct.name);
         closeSaleCard();
+        btn.disabled = false;
         return;
       } catch (e) {
         console.warn('Live sale insert failed, queueing offline', e);
@@ -317,6 +326,7 @@
     queueWrite('sales', salePayload);
     showToast('📦 ' + t('saleQueuedOffline') + ': ' + qty + ' ' + currentProduct.unit + ' — ' + currentProduct.name);
     closeSaleCard();
+    btn.disabled = false;
   });
 
   document.getElementById('logMissedBtn').addEventListener('click', async () => {

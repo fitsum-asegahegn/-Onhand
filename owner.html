@@ -111,14 +111,40 @@
       </div>
     </div>
     <button class="btn-primary" id="addProductBtn" data-i18n="saveGenerateBarcode"></button>
+    <p id="duplicateWarning" style="display:none; background:rgba(193,68,59,.08); border-left:3px solid #c1443b; padding:10px 14px; border-radius:2px; font-size:13px; margin-top:12px;"></p>
     <div id="newBarcodeArea" style="display:none; margin-top:14px;">
-      <div class="barcode-preview"><svg id="newBarcodeSvg"></svg></div>
+      <div class="barcode-preview print-area" id="newBarcodePrintArea">
+        <div class="print-product-name" id="newBarcodeProductName"></div>
+        <svg id="newBarcodeSvg"></svg>
+      </div>
+      <button class="btn-secondary" style="margin-top:10px;" onclick="window.print()">🖨️ Print Label</button>
       <p class="hint" style="text-align:center; margin-top:0;" data-i18n="printLabelHint"></p>
     </div>
   </div>
 
-  <h2 class="section-title" data-i18n="yourProducts"></h2>
+  <h2 class="section-title" data-i18n="batchUploadTitle"></h2>
+  <p class="hint" data-i18n="batchUploadHint"></p>
+  <div class="tag-card">
+    <div style="display:flex; gap:8px; flex-wrap:wrap; align-items:center;">
+      <input type="file" id="csvFileInput" accept=".csv" style="flex:1; min-width:180px; padding:8px; border:1px solid var(--line); border-radius:6px; background:var(--card);">
+      <button class="btn-primary" id="uploadCsvBtn" style="width:auto; padding:11px 18px;" data-i18n="uploadSaveBtn"></button>
+    </div>
+    <div id="csvStatus" style="margin-top:10px; font-size:13px;"></div>
+  </div>
+
+  <div style="display:flex; justify-content:space-between; align-items:center; margin-top:26px; margin-bottom:8px;">
+    <h2 class="section-title" style="margin:0;" data-i18n="yourProducts"></h2>
+    <button class="btn-secondary" id="printAllBtn" style="font-size:12.5px; padding:7px 14px; width:auto;">🖨️ <span data-i18n="printAllBtn"></span></button>
+  </div>
   <div id="productList"><p class="hint">…</p></div>
+
+  <!-- Hidden print targets: made visible only by the @media print rules
+       in layout-fixes.css, never shown during normal browsing. -->
+  <div id="quickPrintArea" class="print-area barcode-preview" style="display:none;">
+    <div class="print-product-name" id="quickPrintName"></div>
+    <svg id="quickPrintSvg"></svg>
+  </div>
+  <div id="printAllArea"></div>
 
 </div>
 
@@ -206,6 +232,7 @@
             </div>
             <div style="display:flex; align-items:center; gap:10px;">
               <span class="stock-flag ${low ? 'low' : 'ok'}">${low ? t('stockLow') : t('stockOk')}</span>
+              <button onclick="event.stopPropagation(); printSingleProduct('${p.id}')" style="background:none; border:none; font-size:15px; cursor:pointer; padding:2px;" title="${t('printLabelBtn')}">🖨️</button>
               <span style="font-size:11px; color:var(--ink-soft); text-decoration:underline;" id="toggleLabel-${p.id}">${t('detailsBtn')}</span>
             </div>
           </div>
@@ -251,7 +278,11 @@
 
       panel.innerHTML = `
         <span class="tag-label">${t('barcodeLabel')}</span>
-        <div class="barcode-preview" style="margin:6px 0 12px;"><svg id="detailBarcode-${productId}"></svg></div>
+        <div class="barcode-preview print-area" style="margin:6px 0 12px;">
+          <div class="print-product-name">${escapeHtml(product.name)}</div>
+          <svg id="detailBarcode-${productId}"></svg>
+        </div>
+        <button class="btn-secondary" onclick="window.print()" style="width:auto; padding:8px 16px; font-size:12.5px; margin-bottom:12px;">🖨️ ${t('printLabelBtn')}</button>
         <div class="stat-row triple" style="gap:8px;">
           <div>
             <div class="tag-label" style="font-size:9.5px;">${t('totalSoldAllTime')}</div>
@@ -262,13 +293,55 @@
             <div class="tag-value good" style="font-size:17px;">${product.current_stock} ${product.unit}</div>
           </div>
         </div>
-        <p class="hint" style="margin-top:10px; margin-bottom:0;">${t('lastSold')}: ${lastSoldText}</p>
+        <p class="hint" style="margin-top:10px; margin-bottom:14px;">${t('lastSold')}: ${lastSoldText}</p>
+        <div style="border-top:1px solid var(--line); padding-top:12px;">
+          <span class="tag-label">${t('addStock')}</span>
+          <p class="hint" style="margin:4px 0 10px;">${t('addStockHint')}</p>
+          <div style="display:flex; gap:8px; align-items:flex-end;">
+            <div class="field" style="margin-bottom:0; flex:1;">
+              <label>${t('quantityReceived')}</label>
+              <input type="number" id="restockQty-${productId}" min="0.1" step="0.5" placeholder="0">
+            </div>
+            <button class="btn-primary" style="width:auto; padding:11px 16px;" onclick="addStock('${productId}')">${t('addStockBtn')}</button>
+          </div>
+          <p id="restockMsg-${productId}" style="font-size:12px; color:var(--good); display:none; margin-top:8px;"></p>
+        </div>
       `;
       JsBarcode('#detailBarcode-' + productId, product.barcode, { format: 'CODE128', height: 50, displayValue: true, fontSize: 11 });
       panel.dataset.loaded = '1';
     } catch (e) {
       panel.innerHTML = `<p style="color:red; font-size:12.5px;">${e.message}</p>`;
     }
+  }
+
+  async function addStock(productId){
+    const input = document.getElementById('restockQty-' + productId);
+    const msg = document.getElementById('restockMsg-' + productId);
+    const qty = parseFloat(input.value);
+    if (!qty || qty <= 0) { input.focus(); return; }
+
+    const { error } = await supabase.from('stock_movements').insert({
+      owner_id: profile.id,
+      product_id: productId,
+      change_amount: qty,
+      reason: 'delivery',
+      recorded_by: profile.id
+    });
+    if (error) { alert('Could not add stock: ' + error.message); return; }
+
+    input.value = '';
+    msg.textContent = '✓ ' + t('stockAdded');
+    msg.style.display = 'block';
+    setTimeout(() => { msg.style.display = 'none'; }, 2500);
+
+    // Force a fresh fetch next time this panel opens, and refresh the
+    // stock number shown on the collapsed row right away.
+    const panel = document.getElementById('details-' + productId);
+    panel.dataset.loaded = '0';
+    await loadProducts();
+    // re-open with fresh numbers since loadProducts() re-renders (and
+    // therefore collapses) every row
+    await toggleProductDetails(productId);
   }
 
   function renderAlerts(){
@@ -291,11 +364,22 @@
     return d.innerHTML;
   }
 
+  // Random, not timestamp-based — a timestamp-derived code risks collisions
+  // when many rows are generated in a tight loop (exactly what CSV batch
+  // upload does), since the unique constraint on barcode would then reject
+  // the second row with the same millisecond-derived value.
   function generateBarcodeValue(){
-    return 'ONHAND' + Date.now().toString().slice(-9);
+    if (window.crypto && crypto.randomUUID) {
+      return 'ONHAND' + crypto.randomUUID().replace(/-/g, '').slice(0, 12).toUpperCase();
+    }
+    return 'ONHAND' + Date.now().toString(36).toUpperCase() + Math.random().toString(36).slice(2, 8).toUpperCase();
   }
 
   document.getElementById('addProductBtn').addEventListener('click', async () => {
+    const btn = document.getElementById('addProductBtn');
+    const warningEl = document.getElementById('duplicateWarning');
+    warningEl.style.display = 'none';
+
     const name = document.getElementById('pName').value.trim();
     const unit = document.getElementById('pUnit').value;
     const cost = parseFloat(document.getElementById('pCost').value) || 0;
@@ -305,26 +389,191 @@
 
     if (!name){ alert('Enter a product name.'); return; }
 
-    const barcode = generateBarcodeValue();
-    const { error } = await supabase.from('products').insert({
-      owner_id: profile.id,
-      name, unit,
-      cost_price: cost,
-      selling_price: price,
-      current_stock: stock,
-      low_stock_threshold: threshold,
-      barcode
+    // A product with this name (any case) already exists — don't create a
+    // second barcode for the same item. Point back to the existing one so
+    // any new stock gets added there instead. This is the fix for "why did
+    // it duplicate Sugar instead of using the one already there."
+    const existing = allProducts.find(p => p.name.trim().toLowerCase() === name.toLowerCase());
+    if (existing) {
+      warningEl.innerHTML = `<b>${escapeHtml(name)}</b> ${t('productAlreadyExists')} <span style="text-decoration:underline; cursor:pointer;" onclick="scrollToProductDetails('${existing.id}')">${t('scrollToExisting')}</span>`;
+      warningEl.style.display = 'block';
+      return;
+    }
+
+    // Guard against double-tap / double-submit creating two rows for one
+    // real product — the most common accidental source of duplicates.
+    if (btn.disabled) return;
+    btn.disabled = true;
+
+    try {
+      const barcode = generateBarcodeValue();
+      const { error } = await supabase.from('products').insert({
+        owner_id: profile.id,
+        name, unit,
+        cost_price: cost,
+        selling_price: price,
+        current_stock: stock,
+        low_stock_threshold: threshold,
+        barcode
+      });
+      if (error){ alert('Could not save product: ' + error.message); return; }
+
+      document.getElementById('newBarcodeArea').style.display = 'block';
+      document.getElementById('newBarcodeProductName').textContent = name;
+      JsBarcode('#newBarcodeSvg', barcode, { format: 'CODE128', height: 60, displayValue: true, fontSize: 12 });
+
+      document.getElementById('pName').value = '';
+      document.getElementById('pCost').value = '';
+      document.getElementById('pPrice').value = '';
+      document.getElementById('pStock').value = '0';
+
+      await loadProducts();
+    } finally {
+      btn.disabled = false;
+    }
+  });
+
+  function scrollToProductDetails(productId){
+    const row = document.getElementById('details-' + productId)?.closest('.product-row');
+    if (!row) return;
+    row.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    row.style.transition = 'background .3s';
+    row.style.background = 'rgba(217,166,46,.15)';
+    setTimeout(() => { row.style.background = ''; }, 1500);
+    const panel = document.getElementById('details-' + productId);
+    if (panel.style.display !== 'block') toggleProductDetails(productId);
+  }
+
+  // ===== PRINTING =====
+  // Both single and print-all reuse the same in-page @media print
+  // mechanism (see layout-fixes.css) — no popup windows, which are
+  // unreliable on mobile browsers (the main way this app is actually used)
+  // and would need their own copy of fonts/branding/JsBarcode to stay
+  // visually consistent with the rest of the app.
+
+  function printSingleProduct(productId){
+    const p = allProducts.find(x => x.id === productId);
+    if (!p) return;
+    document.getElementById('quickPrintName').textContent = p.name;
+    JsBarcode('#quickPrintSvg', p.barcode, { format: 'CODE128', height: 60, displayValue: true, fontSize: 12 });
+    window.print();
+  }
+
+  function printAllLabels(){
+    if (!allProducts.length) { alert('No products to print.'); return; }
+    const area = document.getElementById('printAllArea');
+    area.innerHTML = '<div class="print-label-grid" id="printLabelGrid"></div>';
+    const grid = document.getElementById('printLabelGrid');
+    allProducts.forEach(p => {
+      const div = document.createElement('div');
+      div.className = 'print-label';
+      div.innerHTML = `<svg id="printSvg-${p.id}"></svg><div class="print-product-name">${escapeHtml(p.name)}</div><div class="print-product-price">${Math.round(p.selling_price)} Birr</div>`;
+      grid.appendChild(div);
     });
-    if (error){ alert('Could not save product: ' + error.message); return; }
+    allProducts.forEach(p => {
+      JsBarcode('#printSvg-' + p.id, p.barcode, { format: 'CODE128', height: 40, displayValue: true, fontSize: 10 });
+    });
+    document.body.classList.add('print-all-mode');
+    window.print();
+  }
+  window.onafterprint = () => { document.body.classList.remove('print-all-mode'); };
+  document.getElementById('printAllBtn').addEventListener('click', printAllLabels);
 
-    document.getElementById('newBarcodeArea').style.display = 'block';
-    JsBarcode('#newBarcodeSvg', barcode, { format: 'CODE128', height: 60, displayValue: true, fontSize: 12 });
+  // ===== CSV BATCH UPLOAD =====
+  // Handles quoted fields so a product name containing a comma
+  // (e.g. "Sugar, white") doesn't get split into extra columns.
+  // Known limitation: doesn't handle an escaped quote *inside* a quoted
+  // field (e.g. a literal " character in a name) — an edge case unlikely
+  // for a shop product list, but worth knowing if a row looks wrong.
+  function parseCSVLine(line){
+    const matches = line.match(/(".*?"|[^,]+)(?=\s*,|\s*$)/g);
+    if (!matches) return [];
+    return matches.map(m => m.replace(/^"|"$/g, '').trim());
+  }
 
-    document.getElementById('pName').value = '';
-    document.getElementById('pCost').value = '';
-    document.getElementById('pPrice').value = '';
-    document.getElementById('pStock').value = '0';
+  document.getElementById('uploadCsvBtn').addEventListener('click', async () => {
+    const fileInput = document.getElementById('csvFileInput');
+    const status = document.getElementById('csvStatus');
+    status.style.color = 'var(--ink-soft)';
+    status.textContent = 'Reading file…';
 
+    if (!fileInput.files.length) {
+      status.textContent = 'Please select a CSV file.';
+      status.style.color = '#c1443b';
+      return;
+    }
+
+    const text = await fileInput.files[0].text();
+    const lines = text.split('\n').filter(l => l.trim() !== '');
+    if (lines.length < 2) {
+      status.textContent = 'CSV must have a header row and at least one product row.';
+      status.style.color = '#c1443b';
+      return;
+    }
+
+    const headers = parseCSVLine(lines[0]).map(h => h.toLowerCase());
+    const expected = ['name', 'unit', 'cost_price', 'selling_price', 'current_stock', 'low_stock_threshold'];
+    if (!expected.every(e => headers.includes(e))) {
+      status.textContent = `Invalid headers. Expected: ${expected.join(', ')}`;
+      status.style.color = '#c1443b';
+      return;
+    }
+
+    const existingNames = new Set(allProducts.map(p => p.name.trim().toLowerCase()));
+    const seenInFile = new Set();
+    const products = [];
+    const skipped = [];
+
+    for (let i = 1; i < lines.length; i++) {
+      const cols = parseCSVLine(lines[i]);
+      if (cols.length < headers.length) { skipped.push(`Row ${i + 1}: not enough columns`); continue; }
+
+      const row = {};
+      headers.forEach((h, idx) => { row[h] = cols[idx] || ''; });
+      const nameKey = row.name.trim().toLowerCase();
+
+      if (!row.name) { skipped.push(`Row ${i + 1}: missing name`); continue; }
+      if (existingNames.has(nameKey)) { skipped.push(`Row ${i + 1}: "${row.name}" already exists — use Add Stock on it instead`); continue; }
+      if (seenInFile.has(nameKey)) { skipped.push(`Row ${i + 1}: "${row.name}" appears twice in this file`); continue; }
+      seenInFile.add(nameKey);
+
+      products.push({
+        owner_id: profile.id,
+        name: row.name,
+        unit: row.unit || 'piece',
+        cost_price: parseFloat(row.cost_price) || 0,
+        selling_price: parseFloat(row.selling_price) || 0,
+        current_stock: parseFloat(row.current_stock) || 0,
+        low_stock_threshold: parseFloat(row.low_stock_threshold) || 5,
+        barcode: generateBarcodeValue()
+      });
+    }
+
+    if (!products.length) {
+      status.innerHTML = 'No new products to add.' + (skipped.length ? '<br>' + skipped.join('<br>') : '');
+      status.style.color = '#c1443b';
+      return;
+    }
+
+    status.textContent = `Uploading ${products.length} product(s)…`;
+
+    const batchSize = 50;
+    let successCount = 0;
+    const errorBatches = [];
+    for (let i = 0; i < products.length; i += batchSize) {
+      const batch = products.slice(i, i + batchSize);
+      const { error } = await supabase.from('products').insert(batch);
+      if (error) { errorBatches.push(`Rows ${i + 1}–${i + batch.length}: ${error.message}`); continue; }
+      successCount += batch.length;
+    }
+
+    const messages = [`✅ Added ${successCount} product(s).`];
+    if (skipped.length) messages.push(`Skipped: ${skipped.join('; ')}`);
+    if (errorBatches.length) messages.push(`Errors: ${errorBatches.join('; ')}`);
+    status.innerHTML = messages.join('<br>');
+    status.style.color = errorBatches.length ? '#c1443b' : (skipped.length ? '#A87A1C' : 'var(--good)');
+
+    fileInput.value = '';
     await loadProducts();
   });
 
