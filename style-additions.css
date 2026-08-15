@@ -38,3 +38,6 @@
 @media (prefers-reduced-motion: reduce){
   .offline-banner .dot, .scanner-ready .dot{ animation:none; }
 }
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
