@@ -462,41 +462,55 @@
   // visually consistent with the rest of the app.
 
   // ===== PRINTING =====
-function printSingleProduct(productId){
-  const p = allProducts.find(x => x.id === productId);
-  if (!p) return;
-  document.getElementById('quickPrintName').textContent = p.name;
-  JsBarcode('#quickPrintSvg', p.barcode, { format: 'CODE128', height: 60, displayValue: true, fontSize: 12 });
-  // 👇 ADD THIS DELAY
-  setTimeout(() => {
-    window.print();
-  }, 200);
-}
+function printAllLabels() {
+  if (!allProducts.length) {
+    alert('No products to print.');
+    return;
+  }
 
-function printAllLabels(){
-  if (!allProducts.length) { alert('No products to print.'); return; }
-  const area = document.getElementById('printAllArea');
-  area.innerHTML = '<div class="print-label-grid" id="printLabelGrid"></div>';
-  const grid = document.getElementById('printLabelGrid');
-  allProducts.forEach(p => {
-    const div = document.createElement('div');
-    div.className = 'print-label';
-    div.innerHTML = `<svg id="printSvg-${p.id}"></svg><div class="print-product-name">${escapeHtml(p.name)}</div><div class="print-product-price">${Math.round(p.selling_price)} Birr</div>`;
-    grid.appendChild(div);
-  });
-  allProducts.forEach(p => {
-    JsBarcode('#printSvg-' + p.id, p.barcode, { format: 'CODE128', height: 40, displayValue: true, fontSize: 10 });
-  });
-  document.body.classList.add('print-all-mode');
-  // 👇 ADD THIS DELAY
-  setTimeout(() => {
-    window.print();
-  }, 500);
-}
+  const overlay = document.getElementById('printLoadingOverlay');
+  const progressText = document.getElementById('printProgressText');
 
-window.onafterprint = () => {
-  document.body.classList.remove('print-all-mode');
-};
+  // 1. Show the overlay
+  overlay.style.display = 'flex';
+  progressText.textContent = `Generating ${allProducts.length} barcodes...`;
+
+  // 2. Short delay to let the UI update before heavy work
+  setTimeout(() => {
+    const area = document.getElementById('printAllArea');
+    area.innerHTML = '<div class="print-label-grid" id="printLabelGrid"></div>';
+    const grid = document.getElementById('printLabelGrid');
+
+    // 3. Build the grid
+    allProducts.forEach(p => {
+      const div = document.createElement('div');
+      div.className = 'print-label';
+      div.innerHTML = `<svg id="printSvg-${p.id}"></svg><div class="print-product-name">${escapeHtml(p.name)}</div><div class="print-product-price">${Math.round(p.selling_price)} Birr</div>`;
+      grid.appendChild(div);
+    });
+
+    progressText.textContent = 'Rendering barcodes...';
+
+    // 4. Generate all barcodes
+    allProducts.forEach(p => {
+      JsBarcode('#printSvg-' + p.id, p.barcode, {
+        format: 'CODE128',
+        height: 40,
+        displayValue: true,
+        fontSize: 10
+      });
+    });
+
+    document.body.classList.add('print-all-mode');
+
+    // 5. Hide overlay and trigger print
+    setTimeout(() => {
+      overlay.style.display = 'none';
+      window.print();
+    }, 500); // ← extra time for SVGs to fully paint on screen
+
+  }, 100);
+}
 
   // ===== CSV BATCH UPLOAD =====
   // Handles quoted fields so a product name containing a comma
