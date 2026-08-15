@@ -1,50 +1,159 @@
-
 /* ============================================================
-   LAYOUT FIXES — append to the end of style.css
+   LAYOUT FIXES — Full replacement for layout-fixes.css
    ============================================================ */
 
-/* Text inputs have an invisible default min-width that ignores flexbox
-   shrinking. In a flex row (like the barcode "type the code" + Find
-   button), this pushes sibling elements out past the card instead of
-   the input shrinking — which is what pushed the Find/ፈልግ button past
-   the card edge. This is a standard, safe reset with no side effects. */
-input, select, textarea { min-width: 0; }
+/* --- General UI fixes (screen) --- */
+/* Prevents inputs from overflowing flex containers */
+input, select, textarea {
+  min-width: 0;
+}
 
-/* JsBarcode renders its SVG at a fixed pixel width based on the code's
-   length, with nothing telling it to ever shrink — so a long code like
-   ONHANDB6467F184BB4 renders wider than its card and spills past the
-   rounded border to the edge of the screen. Constraining the SVG to
-   the container width lets it scale down proportionally instead. */
-.barcode-preview{ overflow:hidden; }
-.barcode-preview svg{ max-width:100%; height:auto; display:block; margin:0 auto; }
+/* Prevents barcode SVGs from spilling out of their cards */
+.barcode-preview {
+  overflow: hidden;
+}
+.barcode-preview svg {
+  max-width: 100%;
+  height: auto;
+  display: block;
+  margin: 0 auto;
+}
 
-/* ---------- Print label ---------- */
-/* Two print modes, distinguished by a body class toggled right before
-   window.print(): single-label (Add Product / Details / quick-print) vs
-   print-all (a grid of every product's label on one sheet). Without this
-   split, an open Details panel's barcode and the print-all grid would
-   both try to render fixed-position at the same spot simultaneously. */
-#printAllArea{ display:none; }
+/* --- Print All: hidden by default, shown only during print --- */
+#printAllArea {
+  display: none;
+}
 
+/* ============================================================
+   PRINT STYLES
+   ============================================================ */
+
+/* ---------- 1. Single Label Print ---------- */
 @media print {
-  body *{ visibility:hidden; }
-
-  body:not(.print-all-mode) .print-area,
-  body:not(.print-all-mode) .print-area *{ visibility:visible; }
-  body:not(.print-all-mode) .print-area{
-    display:block; position:fixed; top:0; left:0; width:100%; text-align:center; padding-top:30px;
-  }
-  .print-area .print-product-name{
-    font-family:var(--display); font-weight:700; font-size:20px; margin-bottom:10px;
+  /* Hide everything on the page by default */
+  body * {
+    visibility: hidden;
   }
 
+  /* Reveal only the quick-print area and its children */
+  #quickPrintArea,
+  #quickPrintArea * {
+    visibility: visible;
+  }
+
+  /* Style the single label container */
+  #quickPrintArea {
+    display: flex !important;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    height: 100vh; /* Full viewport height */
+    width: 100%;
+    margin: 0;
+    padding: 20px;
+    box-sizing: border-box;
+    text-align: center;
+    position: fixed;
+    top: 0;
+    left: 0;
+    background: #fff;
+    /* Prevent splitting the label across two pages */
+    page-break-after: avoid;
+    page-break-inside: avoid;
+  }
+
+  /* Ensure the barcode SVG scales nicely */
+  #quickPrintArea svg {
+    max-width: 80%;
+    height: auto;
+    display: block;
+    margin: 0 auto;
+  }
+
+  /* Product name styling */
+  #quickPrintName {
+    font-size: 24px;
+    font-weight: 700;
+    margin-bottom: 10px;
+    font-family: 'Space Grotesk', 'Inter', sans-serif;
+  }
+
+  /* Optional price line (if you add it to the HTML) */
+  .print-product-price {
+    font-size: 18px;
+    color: #555;
+    margin-top: 4px;
+  }
+}
+
+/* ---------- 2. Print All (Grid of Labels) ---------- */
+@media print {
+  /* When in print-all mode, hide everything EXCEPT the print area */
+  body.print-all-mode * {
+    visibility: hidden;
+  }
   body.print-all-mode #printAllArea,
-  body.print-all-mode #printAllArea *{ visibility:visible; }
-  body.print-all-mode #printAllArea{
-    display:block; position:fixed; top:0; left:0; width:100%; padding:24px;
+  body.print-all-mode #printAllArea * {
+    visibility: visible;
   }
-  .print-label-grid{ display:grid; grid-template-columns:repeat(auto-fill, minmax(170px,1fr)); gap:16px; }
-  .print-label{ text-align:center; padding:10px; border:1px solid #ccc; border-radius:6px; page-break-inside:avoid; }
-  .print-label .print-product-name{ font-family:var(--display); font-weight:700; font-size:13px; margin:4px 0 2px; }
-  .print-label .print-product-price{ font-size:11px; color:#555; }
+
+  /* Make the print-all area fill the page */
+  body.print-all-mode #printAllArea {
+    display: block !important;
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    overflow: auto;
+    padding: 24px;
+    box-sizing: border-box;
+    background: #fff;
+  }
+
+  /* The grid layout */
+  .print-label-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+    gap: 16px;
+  }
+
+  /* Each individual label card */
+  .print-label {
+    text-align: center;
+    padding: 12px;
+    border: 1px solid #ccc;
+    border-radius: 6px;
+    background: #fff;
+    /* Prevents a single label from being cut in half by a page break */
+    page-break-inside: avoid;
+  }
+
+  /* Barcode SVG inside the grid */
+  .print-label svg {
+    max-width: 100%;
+    height: auto;
+    display: block;
+    margin: 0 auto;
+  }
+
+  /* Product name text */
+  .print-label .print-product-name {
+    font-weight: 700;
+    font-size: 13px;
+    margin: 6px 0 2px;
+    font-family: 'Space Grotesk', 'Inter', sans-serif;
+  }
+
+  /* Price text */
+  .print-label .print-product-price {
+    font-size: 11px;
+    color: #555;
+  }
+}
+
+/* ---------- 3. Global Print Settings ---------- */
+/* Reduce page margins to fit more labels per page */
+@page {
+  margin: 0.5cm;
 }
