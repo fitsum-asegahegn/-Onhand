@@ -453,33 +453,42 @@
   // and would need their own copy of fonts/branding/JsBarcode to stay
   // visually consistent with the rest of the app.
 
-  function printSingleProduct(productId){
-    const p = allProducts.find(x => x.id === productId);
-    if (!p) return;
-    document.getElementById('quickPrintName').textContent = p.name;
-    JsBarcode('#quickPrintSvg', p.barcode, { format: 'CODE128', height: 60, displayValue: true, fontSize: 12 });
+  // ===== PRINTING =====
+function printSingleProduct(productId){
+  const p = allProducts.find(x => x.id === productId);
+  if (!p) return;
+  document.getElementById('quickPrintName').textContent = p.name;
+  JsBarcode('#quickPrintSvg', p.barcode, { format: 'CODE128', height: 60, displayValue: true, fontSize: 12 });
+  // 👇 ADD THIS DELAY
+  setTimeout(() => {
     window.print();
-  }
+  }, 200);
+}
 
-  function printAllLabels(){
-    if (!allProducts.length) { alert('No products to print.'); return; }
-    const area = document.getElementById('printAllArea');
-    area.innerHTML = '<div class="print-label-grid" id="printLabelGrid"></div>';
-    const grid = document.getElementById('printLabelGrid');
-    allProducts.forEach(p => {
-      const div = document.createElement('div');
-      div.className = 'print-label';
-      div.innerHTML = `<svg id="printSvg-${p.id}"></svg><div class="print-product-name">${escapeHtml(p.name)}</div><div class="print-product-price">${Math.round(p.selling_price)} Birr</div>`;
-      grid.appendChild(div);
-    });
-    allProducts.forEach(p => {
-      JsBarcode('#printSvg-' + p.id, p.barcode, { format: 'CODE128', height: 40, displayValue: true, fontSize: 10 });
-    });
-    document.body.classList.add('print-all-mode');
+function printAllLabels(){
+  if (!allProducts.length) { alert('No products to print.'); return; }
+  const area = document.getElementById('printAllArea');
+  area.innerHTML = '<div class="print-label-grid" id="printLabelGrid"></div>';
+  const grid = document.getElementById('printLabelGrid');
+  allProducts.forEach(p => {
+    const div = document.createElement('div');
+    div.className = 'print-label';
+    div.innerHTML = `<svg id="printSvg-${p.id}"></svg><div class="print-product-name">${escapeHtml(p.name)}</div><div class="print-product-price">${Math.round(p.selling_price)} Birr</div>`;
+    grid.appendChild(div);
+  });
+  allProducts.forEach(p => {
+    JsBarcode('#printSvg-' + p.id, p.barcode, { format: 'CODE128', height: 40, displayValue: true, fontSize: 10 });
+  });
+  document.body.classList.add('print-all-mode');
+  // 👇 ADD THIS DELAY
+  setTimeout(() => {
     window.print();
-  }
-  window.onafterprint = () => { document.body.classList.remove('print-all-mode'); };
-  document.getElementById('printAllBtn').addEventListener('click', printAllLabels);
+  }, 500);
+}
+
+window.onafterprint = () => {
+  document.body.classList.remove('print-all-mode');
+};
 
   // ===== CSV BATCH UPLOAD =====
   // Handles quoted fields so a product name containing a comma
