@@ -18,63 +18,74 @@
       <div class="brand" style="font-size:26px; font-weight:700;">On<span style="color:#2563eb;">hand</span></div>
       <div style="font-size:10px; color:var(--ink-soft); letter-spacing:0.05em;">በእጄ</div>
     </div>
-    <div style="display:flex; align-items:center; gap:12px;">
-      <span style="font-size:12px; text-transform:uppercase; color:var(--ink-soft);">Keeper</span>
-      <button onclick="signOut()" style="background:none; border:1px solid #ddd; padding:6px 14px; border-radius:6px; font-size:14px; cursor:pointer;">Sign out</button>
+    <div style="display:flex; align-items:center; gap:10px;">
+      <button class="lang-toggle" id="langToggle" onclick="toggleLang()">አማርኛ</button>
+      <span style="font-size:12px; text-transform:uppercase; color:var(--ink-soft);" data-i18n="keeperBadge"></span>
+      <button onclick="signOut()" style="background:none; border:1px solid #ddd; padding:6px 14px; border-radius:6px; font-size:14px; cursor:pointer;" data-i18n="signOut"></button>
     </div>
   </header>
 
+  <div id="offlineBanner" class="offline-banner">
+    <span class="dot"></span>
+    <span data-i18n="offlineBanner"></span>
+    <span id="pendingCount"></span>
+  </div>
+
   <button class="scan-button" id="startScanBtn">
-    📷 Scan a Product
-    <span class="sub">Tap to open the camera</span>
+    📷 <span data-i18n="scanProduct"></span>
+    <span class="sub" data-i18n="tapToOpenCamera"></span>
   </button>
 
   <div id="reader" style="display:none; margin:10px 0;"></div>
   <div id="scanControls" style="display:none; gap:10px; margin-bottom:16px;">
-    <button class="btn-secondary" id="stopScanBtn" style="flex:1;">Cancel Scan</button>
-    <button class="btn-secondary" id="torchBtn" style="flex:1; display:none;">💡 Torch</button>
+    <button class="btn-secondary" id="stopScanBtn" style="flex:1;" data-i18n="cancelScan"></button>
+    <button class="btn-secondary" id="torchBtn" style="flex:1; display:none;">💡 <span data-i18n="torch"></span></button>
   </div>
 
-  <!-- Manual fallback: always available, not just when the camera fails -->
   <div class="tag-card" style="margin-bottom:16px;">
-    <span class="tag-label">Or type the code</span>
-    <p class="hint" style="margin:2px 0 10px;">Printed on the label under the barcode lines.</p>
-    <div style="display:flex; gap:8px;">
-      <input type="text" id="manualBarcode" placeholder="e.g. ONHAND738514783" style="flex:1;">
-      <button class="btn-primary" id="manualLookupBtn" style="flex:0 0 auto; padding:12px 18px;">Find</button>
+    <span class="tag-label" data-i18n="orTypeCode"></span>
+    <p class="hint" style="margin:2px 0 10px;" data-i18n="scannerHint"></p>
+    <div style="display:flex; gap:8px; align-items:center;">
+      <input type="text" id="manualBarcode" data-i18n-placeholder="typeCodePlaceholder" style="flex:1;">
+      <button class="btn-primary" id="manualLookupBtn" style="flex:0 0 auto; padding:12px 18px;" data-i18n="find"></button>
+    </div>
+    <div class="scanner-ready" id="scannerReadyDot" style="display:none;">
+      <span class="dot"></span> <span id="scannerReadyText"></span>
     </div>
   </div>
 
   <div class="tag-card" id="saleCard" style="display:none;">
-    <span class="tag-label">Selling</span>
+    <span class="tag-label" data-i18n="selling"></span>
     <div class="tag-value" id="saleProductName" style="font-size:20px;">—</div>
     <div class="tag-sub" id="saleUnitPrice"></div>
 
     <div class="field" style="margin-top:14px;">
-      <label for="saleQty">Quantity</label>
+      <label for="saleQty" data-i18n="quantity"></label>
       <input type="number" id="saleQty" min="0.1" step="0.1" value="1">
     </div>
 
     <div style="display:flex; gap:10px;">
-      <button class="btn-secondary" id="cancelSaleBtn" style="flex:1;">Cancel</button>
-      <button class="btn-primary" id="confirmSaleBtn" style="flex:1;">Confirm Sale</button>
+      <button class="btn-secondary" id="cancelSaleBtn" style="flex:1;" data-i18n="cancel"></button>
+      <button class="btn-primary" id="confirmSaleBtn" style="flex:1;" data-i18n="confirmSale"></button>
     </div>
   </div>
 
-  <h2 class="section-title">Item not found?</h2>
-  <p class="hint">If a customer asks for something out of stock or not yet in the system, log it — this helps restock the right things.</p>
+  <h2 class="section-title" data-i18n="itemNotFound"></h2>
+  <p class="hint" data-i18n="itemNotFoundHint"></p>
   <div class="tag-card">
     <div class="field" style="margin-bottom:12px;">
-      <label for="missedName">What did they ask for?</label>
-      <input type="text" id="missedName" placeholder="e.g. Cooking oil 1L">
+      <label for="missedName" data-i18n="whatDidTheyAsk"></label>
+      <input type="text" id="missedName" data-i18n-placeholder="missedSalePlaceholder">
     </div>
-    <button class="btn-danger-outline" id="logMissedBtn">Log Missed Sale</button>
+    <button class="btn-danger-outline" id="logMissedBtn" data-i18n="logMissedSale"></button>
   </div>
 
   <div id="toastArea"></div>
 </div>
 
 <script src="supabaseClient.js"></script>
+<script src="i18n.js"></script>
+<script src="offline.js"></script>
 <script>
   let profile = null;
   let html5QrCode = null;
@@ -90,28 +101,53 @@
     setTimeout(() => el.remove(), 3000);
   }
 
-  async function lookupProduct(barcode) {
+  function focusManualInput() {
+    const input = document.getElementById('manualBarcode');
+    if (document.getElementById('saleCard').style.display === 'none') {
+      input.focus();
+    }
+  }
+
+  async function refreshProductCache() {
+    if (!navigator.onLine || !profile) return;
     try {
       const { data, error } = await supabase
         .from('products')
-        .select('id, name, unit, selling_price, current_stock')
-        .eq('owner_id', profile.owner_id)
-        .eq('barcode', barcode.trim())
-        .maybeSingle();
+        .select('id, name, unit, selling_price, cost_price, current_stock, barcode')
+        .eq('owner_id', profile.owner_id);
       if (error) throw error;
-      return data;
+      cacheProducts(profile.owner_id, data || []);
     } catch (e) {
-      console.error('lookup error:', e);
-      showToast('Error looking up product: ' + e.message, true);
-      return null;
+      console.warn('Could not refresh offline product cache', e);
     }
+  }
+
+  async function lookupProduct(barcode) {
+    const code = barcode.trim();
+    if (navigator.onLine) {
+      try {
+        const { data, error } = await supabase
+          .from('products')
+          .select('id, name, unit, selling_price, cost_price, current_stock')
+          .eq('owner_id', profile.owner_id)
+          .eq('barcode', code)
+          .maybeSingle();
+        if (error) throw error;
+        if (data) return data;
+        return null;
+      } catch (e) {
+        console.warn('Live lookup failed, trying offline cache', e);
+      }
+    }
+    const cached = getCachedProducts(profile.owner_id);
+    return cached.find(p => p.barcode === code) || null;
   }
 
   function openSaleCard(product) {
     currentProduct = product;
     document.getElementById('saleProductName').textContent = product.name;
     document.getElementById('saleUnitPrice').textContent =
-      `${Math.round(product.selling_price)} Birr per ${product.unit} · ${product.current_stock} in stock`;
+      Math.round(product.selling_price) + ' Birr · ' + product.unit + ' · ' + product.current_stock + ' ' + t('inStock');
     document.getElementById('saleQty').value = 1;
     document.getElementById('saleCard').style.display = 'block';
   }
@@ -119,15 +155,13 @@
   function closeSaleCard() {
     currentProduct = null;
     document.getElementById('saleCard').style.display = 'none';
+    focusManualInput();
   }
 
   async function onScanSuccess(decodedText) {
     await stopScanner();
     const product = await lookupProduct(decodedText);
-    if (!product) {
-      showToast("That barcode isn't in your shop's catalog.", true);
-      return;
-    }
+    if (!product) { showToast(t('barcodeNotFound'), true); return; }
     openSaleCard(product);
   }
 
@@ -147,8 +181,8 @@
         { facingMode: "environment" },
         {
           fps: 15,
-          qrbox: (viewfinderWidth, viewfinderHeight) => {
-            const w = Math.floor(Math.min(viewfinderWidth * 0.85, 380));
+          qrbox: function(viewfinderWidth) {
+            var w = Math.floor(Math.min(viewfinderWidth * 0.85, 380));
             return { width: w, height: Math.floor(w * 0.45) };
           }
         },
@@ -156,14 +190,14 @@
       );
 
       try {
-        const capabilities = html5QrCode.getRunningTrackCapabilities();
+        var capabilities = html5QrCode.getRunningTrackCapabilities();
         if (capabilities && capabilities.torch) {
           document.getElementById('torchBtn').style.display = 'block';
         }
-      } catch (e) { /* not supported on this device — fine */ }
+      } catch (e) { /* not supported — fine */ }
 
     } catch (e) {
-      showToast("Couldn't open camera. Check permissions.", true);
+      showToast(t('couldNotOpenCamera'), true);
       await stopScanner();
     }
   }
@@ -173,38 +207,34 @@
     try {
       torchOn = !torchOn;
       await html5QrCode.applyVideoConstraints({ advanced: [{ torch: torchOn }] });
-      document.getElementById('torchBtn').textContent = torchOn ? '💡 Torch On' : '💡 Torch';
     } catch (e) {
-      showToast('Torch not available on this device.', true);
+      showToast(t('torchNotAvailable'), true);
     }
   });
 
   async function stopScanner() {
     if (html5QrCode) {
-      try {
-        await html5QrCode.stop();
-        await html5QrCode.clear();
-      } catch (e) {}
+      try { await html5QrCode.stop(); await html5QrCode.clear(); } catch (e) {}
       html5QrCode = null;
     }
     torchOn = false;
     document.getElementById('reader').style.display = 'none';
     document.getElementById('scanControls').style.display = 'none';
     document.getElementById('torchBtn').style.display = 'none';
-    document.getElementById('torchBtn').textContent = '💡 Torch';
     document.getElementById('startScanBtn').style.display = 'block';
+    focusManualInput();
   }
 
   document.getElementById('manualLookupBtn').addEventListener('click', async () => {
     const code = document.getElementById('manualBarcode').value.trim();
-    if (!code) { showToast('Enter a barcode number.', true); return; }
+    if (!code) { showToast(t('enterBarcode'), true); return; }
     const product = await lookupProduct(code);
-    if (!product) { showToast("That barcode isn't in your shop's catalog.", true); return; }
+    if (!product) { showToast(t('barcodeNotFound'), true); return; }
     document.getElementById('manualBarcode').value = '';
     openSaleCard(product);
   });
   document.getElementById('manualBarcode').addEventListener('keydown', (e) => {
-    if (e.key === 'Enter') document.getElementById('manualLookupBtn').click();
+    if (e.key === 'Enter') { e.preventDefault(); document.getElementById('manualLookupBtn').click(); }
   });
 
   document.getElementById('startScanBtn').addEventListener('click', startScanner);
@@ -214,68 +244,82 @@
   document.getElementById('confirmSaleBtn').addEventListener('click', async () => {
     if (!currentProduct) return;
     const qty = parseFloat(document.getElementById('saleQty').value);
-    if (!qty || qty <= 0) {
-      showToast('Enter a valid quantity.', true);
-      return;
+    if (!qty || qty <= 0) { showToast(t('enterValidQuantity'), true); return; }
+
+    const salePayload = {
+      owner_id: profile.owner_id,
+      product_id: currentProduct.id,
+      sold_by: profile.id,
+      quantity: qty,
+      unit_price_at_sale: currentProduct.selling_price,
+      cost_price_at_sale: currentProduct.cost_price
+    };
+
+    if (navigator.onLine) {
+      try {
+        const { error } = await supabase.from('sales').insert(salePayload);
+        if (error) throw error;
+        showToast('✅ ' + t('saleRecorded') + ': ' + qty + ' ' + currentProduct.unit + ' — ' + currentProduct.name);
+        closeSaleCard();
+        return;
+      } catch (e) {
+        console.warn('Live sale insert failed, queueing offline', e);
+      }
     }
 
-    try {
-      const { data: full, error: fetchErr } = await supabase
-        .from('products')
-        .select('cost_price, selling_price')
-        .eq('id', currentProduct.id)
-        .single();
-      if (fetchErr) throw fetchErr;
-
-      const { error } = await supabase.from('sales').insert({
-        owner_id: profile.owner_id,
-        product_id: currentProduct.id,
-        sold_by: profile.id,
-        quantity: qty,
-        unit_price_at_sale: full.selling_price,
-        cost_price_at_sale: full.cost_price
-      });
-      if (error) throw error;
-
-      showToast(`✅ Sold ${qty} ${currentProduct.unit} of ${currentProduct.name}`);
-      closeSaleCard();
-    } catch (e) {
-      showToast('Sale failed: ' + e.message, true);
-    }
+    queueWrite('sales', salePayload);
+    showToast('📦 ' + t('saleQueuedOffline') + ': ' + qty + ' ' + currentProduct.unit + ' — ' + currentProduct.name);
+    closeSaleCard();
   });
 
   document.getElementById('logMissedBtn').addEventListener('click', async () => {
     const name = document.getElementById('missedName').value.trim();
-    if (!name) {
-      showToast('Enter what the customer asked for.', true);
-      return;
+    if (!name) { showToast(t('enterMissedItem'), true); return; }
+
+    const payload = {
+      owner_id: profile.owner_id,
+      product_name_free_text: name,
+      reported_by: profile.id
+    };
+
+    if (navigator.onLine) {
+      try {
+        const { error } = await supabase.from('missed_sales').insert(payload);
+        if (error) throw error;
+        document.getElementById('missedName').value = '';
+        showToast('📝 ' + t('missedLogged'));
+        return;
+      } catch (e) {
+        console.warn('Live missed-sale insert failed, queueing offline', e);
+      }
     }
-    try {
-      const { error } = await supabase.from('missed_sales').insert({
-        owner_id: profile.owner_id,
-        product_name_free_text: name,
-        reported_by: profile.id
-      });
-      if (error) throw error;
-      document.getElementById('missedName').value = '';
-      showToast('📝 Logged — thanks!');
-    } catch (e) {
-      showToast('Could not log: ' + e.message, true);
-    }
+
+    queueWrite('missed_sales', payload);
+    document.getElementById('missedName').value = '';
+    showToast('📦 ' + t('missedQueuedOffline'));
   });
 
   (async () => {
     profile = await requireRole('keeper');
     if (!profile) return;
+
     if (!profile.owner_id) {
-      document.querySelector('.screen').innerHTML = `
-        <div style="padding:40px; text-align:center; color:red;">
-          <p>⚠️ This keeper account is not linked to a shop.</p>
-          <p>Please contact your shop owner for the correct shop code and sign up again.</p>
-          <button onclick="signOut()" class="btn-primary" style="margin-top:20px;">Sign out</button>
-        </div>
-      `;
+      document.querySelector('.screen').innerHTML =
+        '<div style="padding:40px; text-align:center; color:red;">' +
+        '<p>⚠️ ' + t('notLinkedTitle') + '</p>' +
+        '<p>' + t('notLinkedBody') + '</p>' +
+        '<button onclick="signOut()" class="btn-primary" style="margin-top:20px;">' + t('signOut') + '</button>' +
+        '</div>';
+      return;
     }
+
+    await refreshProductCache();
+    setInterval(refreshProductCache, 5 * 60 * 1000);
+
+    document.getElementById('scannerReadyDot').style.display = 'inline-flex';
+    document.getElementById('scannerReadyText').textContent =
+      currentLang === 'am' ? 'ለስካን ዝግጁ' : 'Ready for scanner input';
+    focusManualInput();
   })();
 </script>
 </body>
