@@ -7,16 +7,29 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="style.css">
+<link rel="manifest" href="manifest.json">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="Onhand">
+<meta name="theme-color" content="#F7F3EA">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="https://cdn.jsdelivr.net/npm/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+<script>
+  if ('serviceWorker' in navigator) {
+    window.addEventListener('load', () => {
+      navigator.serviceWorker.register('/service-worker.js').catch(err => console.warn('SW registration failed:', err));
+    });
+  }
+</script>
 </head>
-<body>
+<body data-page="dashboard">
 <div class="screen">
 
   <header style="display:flex; justify-content:space-between; align-items:center; padding:16px 20px; border-bottom:1px solid var(--line);">
     <div>
-      <div class="brand" style="font-size:26px; font-weight:700;">On<span style="color:#2563eb;">hand</span></div>
-      <div style="font-size:10px; color:var(--ink-soft); letter-spacing:0.05em;">በእጄ</div>
+      <div class="brand" style="font-size:26px; font-weight:700;"><span id="brandPart1">On</span><span id="brandPart2" style="color:#2563eb;">hand</span></div>
+      <div style="font-size:10px; color:var(--ink-soft); letter-spacing:0.05em;" id="brandSubtitle">በእጄ</div>
     </div>
     <div style="display:flex; align-items:center; gap:10px;">
       <button class="lang-toggle" id="langToggle" onclick="toggleLang()">አማርኛ</button>
@@ -53,6 +66,11 @@
       <span class="dot"></span> <span id="scannerReadyText"></span>
     </div>
   </div>
+
+  <details class="tag-card" style="margin-bottom:16px;" id="stockPanel">
+    <summary style="cursor:pointer; font-weight:700; font-size:13px; font-family:var(--display); text-transform:uppercase; letter-spacing:.04em;" data-i18n="viewStockTitle"></summary>
+    <div id="stockList" style="margin-top:12px;"><p class="hint">…</p></div>
+  </details>
 
   <div class="tag-card" id="saleCard" style="display:none;">
     <span class="tag-label" data-i18n="selling"></span>
@@ -117,9 +135,38 @@
         .eq('owner_id', profile.owner_id);
       if (error) throw error;
       cacheProducts(profile.owner_id, data || []);
+      renderStockList(data || []);
     } catch (e) {
       console.warn('Could not refresh offline product cache', e);
+      // still show something useful offline, from whatever was last cached
+      renderStockList(getCachedProducts(profile.owner_id));
     }
+  }
+
+  // Deliberately excludes cost_price — this is the same list the keeper
+  // can already see mid-sale (name, unit, stock, selling price), just
+  // browsable up front so they can answer "do we have more sugar?"
+  // without needing to scan anything.
+  function renderStockList(products) {
+    const el = document.getElementById('stockList');
+    if (!products.length) {
+      el.innerHTML = '<p class="empty-state">…</p>';
+      return;
+    }
+    const sorted = [...products].sort((a, b) => a.name.localeCompare(b.name));
+    el.innerHTML = sorted.map(p => {
+      const d = document.createElement('div');
+      d.textContent = p.name;
+      const safeName = d.innerHTML;
+      return `
+        <div class="product-row">
+          <div>
+            <div class="name">${safeName}</div>
+            <div class="meta">${Math.round(p.selling_price)} Birr · ${p.unit}</div>
+          </div>
+          <span class="stock-flag ok">${p.current_stock} ${p.unit}</span>
+        </div>`;
+    }).join('');
   }
 
   async function lookupProduct(barcode) {

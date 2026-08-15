@@ -1,0 +1,43 @@
+
+/* ============================================================
+   DESKTOP RESPONSIVE LAYOUT
+   Append to the end of style.css (after the earlier additions).
+   Mobile behavior (anything under 640px) is completely unchanged —
+   this only adds rules for wider viewports.
+   ============================================================ */
+
+/* Comfortable breathing room on tablets and small laptops */
+@media (min-width: 640px) {
+  .screen{ max-width: 600px; padding-left: 32px; padding-right: 32px; }
+}
+
+/* Owner and keeper pages: real desktop gets a genuinely wider layout,
+   since these are dashboards meant to be scanned/read, not a stretched
+   phone screen with huge empty margins on either side. */
+@media (min-width: 900px) {
+  body[data-page="dashboard"] .screen{ max-width: 760px; }
+  body[data-page="dashboard"] header{ padding-left: 4px; padding-right: 4px; }
+}
+@media (min-width: 1280px) {
+  body[data-page="dashboard"] .screen{ max-width: 880px; }
+}
+
+/* Sign-in/sign-up stays a normal login-card width even on a huge
+   monitor — matching it to the dashboard width would spread a small
+   form across a very wide, awkward card. It just gets a bit more
+   vertical breathing room instead. */
+@media (min-width: 640px) {
+  body[data-page="auth"] .screen{ max-width: 460px; }
+}
+@media (min-height: 800px) and (min-width: 640px) {
+  body[data-page="auth"] .screen{
+    min-height: 100vh; display:flex; flex-direction:column; justify-content:center;
+  }
+}
+
+/* The camera scanner shouldn't blow up to the full dashboard width on
+   a wide screen — a giant stretched webcam feed looks broken. Cap it
+   and center it regardless of how wide .screen has become. */
+@media (min-width: 640px) {
+  #reader{ max-width: 420px; margin-left:auto; margin-right:auto; }
+}

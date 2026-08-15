@@ -7,16 +7,29 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="style.css">
+<link rel="manifest" href="manifest.json">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="Onhand">
+<meta name="theme-color" content="#F7F3EA">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.6/dist/JsBarcode.all.min.js"></script>
+<script>
+  if ('serviceWorker' in navigator) {
+    window.addEventListener('load', () => {
+      navigator.serviceWorker.register('/service-worker.js').catch(err => console.warn('SW registration failed:', err));
+    });
+  }
+</script>
 </head>
-<body>
+<body data-page="dashboard">
 <div class="screen">
 
   <header style="display:flex; justify-content:space-between; align-items:center; padding:16px 20px; border-bottom:1px solid var(--line);">
     <div>
-      <div class="brand" style="font-size:26px; font-weight:700;">On<span style="color:#2563eb;">hand</span></div>
-      <div style="font-size:10px; color:var(--ink-soft); letter-spacing:0.05em;">በእጄ</div>
+      <div class="brand" style="font-size:26px; font-weight:700;"><span id="brandPart1">On</span><span id="brandPart2" style="color:#2563eb;">hand</span></div>
+      <div style="font-size:10px; color:var(--ink-soft); letter-spacing:0.05em;" id="brandSubtitle">በእጄ</div>
     </div>
     <div style="display:flex; align-items:center; gap:10px;">
       <button class="lang-toggle" id="langToggle" onclick="toggleLang()">አማርኛ</button>
@@ -185,14 +198,77 @@
     el.innerHTML = allProducts.map(p => {
       const low = Number(p.current_stock) <= Number(p.low_stock_threshold);
       return `
-        <div class="product-row">
-          <div>
-            <div class="name">${escapeHtml(p.name)}</div>
-            <div class="meta">${p.current_stock} ${p.unit} ${t('inStock')}</div>
+        <div class="product-row" style="flex-direction:column; align-items:stretch; cursor:pointer;" onclick="toggleProductDetails('${p.id}')">
+          <div style="display:flex; justify-content:space-between; align-items:center;">
+            <div>
+              <div class="name">${escapeHtml(p.name)}</div>
+              <div class="meta">${p.current_stock} ${p.unit} ${t('inStock')}</div>
+            </div>
+            <div style="display:flex; align-items:center; gap:10px;">
+              <span class="stock-flag ${low ? 'low' : 'ok'}">${low ? t('stockLow') : t('stockOk')}</span>
+              <span style="font-size:11px; color:var(--ink-soft); text-decoration:underline;" id="toggleLabel-${p.id}">${t('detailsBtn')}</span>
+            </div>
           </div>
-          <span class="stock-flag ${low ? 'low' : 'ok'}">${low ? t('stockLow') : t('stockOk')}</span>
+          <div id="details-${p.id}" style="display:none; margin-top:12px; padding-top:12px; border-top:1px solid var(--line);" onclick="event.stopPropagation()"></div>
         </div>`;
     }).join('');
+  }
+
+  async function toggleProductDetails(productId){
+    const panel = document.getElementById('details-' + productId);
+    const label = document.getElementById('toggleLabel-' + productId);
+    const isOpen = panel.style.display === 'block';
+
+    if (isOpen){
+      panel.style.display = 'none';
+      label.textContent = t('detailsBtn');
+      return;
+    }
+
+    panel.style.display = 'block';
+    label.textContent = t('hideDetailsBtn');
+
+    if (panel.dataset.loaded === '1') return; // already fetched — don't re-query every toggle
+
+    const product = allProducts.find(p => p.id === productId);
+    panel.innerHTML = '<p class="hint">…</p>';
+
+    try {
+      const { data, error } = await supabase
+        .from('sales')
+        .select('quantity, sold_at')
+        .eq('product_id', productId);
+      if (error) throw error;
+
+      const rows = data || [];
+      const totalSold = rows.reduce((sum, s) => sum + Number(s.quantity), 0);
+      const lastSoldAt = rows.length
+        ? rows.reduce((latest, s) => (s.sold_at > latest ? s.sold_at : latest), rows[0].sold_at)
+        : null;
+      const lastSoldText = lastSoldAt
+        ? new Date(lastSoldAt).toLocaleString('en-US', { dateStyle: 'medium', timeStyle: 'short' })
+        : t('neverSold');
+
+      panel.innerHTML = `
+        <span class="tag-label">${t('barcodeLabel')}</span>
+        <div class="barcode-preview" style="margin:6px 0 12px;"><svg id="detailBarcode-${productId}"></svg></div>
+        <div class="stat-row triple" style="gap:8px;">
+          <div>
+            <div class="tag-label" style="font-size:9.5px;">${t('totalSoldAllTime')}</div>
+            <div class="tag-value" style="font-size:17px;">${totalSold} ${product.unit}</div>
+          </div>
+          <div>
+            <div class="tag-label" style="font-size:9.5px;">${t('currentlyLeft')}</div>
+            <div class="tag-value good" style="font-size:17px;">${product.current_stock} ${product.unit}</div>
+          </div>
+        </div>
+        <p class="hint" style="margin-top:10px; margin-bottom:0;">${t('lastSold')}: ${lastSoldText}</p>
+      `;
+      JsBarcode('#detailBarcode-' + productId, product.barcode, { format: 'CODE128', height: 50, displayValue: true, fontSize: 11 });
+      panel.dataset.loaded = '1';
+    } catch (e) {
+      panel.innerHTML = `<p style="color:red; font-size:12.5px;">${e.message}</p>`;
+    }
   }
 
   function renderAlerts(){

@@ -92,6 +92,16 @@ const translations = {
     offlineBanner: "Offline — sales are being saved on this phone and will sync when you're back online.",
     pendingSync: "waiting to sync",
 
+    brandOtherName: "በእጄ — In your hand",
+    viewStockTitle: "View Stock & Prices",
+    detailsBtn: "Details",
+    hideDetailsBtn: "Hide",
+    totalSoldAllTime: "Total sold (all time)",
+    currentlyLeft: "Currently in stock",
+    lastSold: "Last sold",
+    neverSold: "Not sold yet",
+    barcodeLabel: "Barcode",
+
     enterValidQuantity: "Enter a valid quantity.",
     saleRecorded: "Sold",
     saleQueuedOffline: "Sold — saved offline, will sync when back online",
@@ -185,6 +195,16 @@ const translations = {
     offlineBanner: "ከመስመር ውጭ — ሽያጮች በዚህ ስልክ ላይ እየተቀመጡ ነው፣ ተመልሰው ሲገናኙ ይመሳሰላሉ።",
     pendingSync: "ለማመሳሰል በመጠበቅ ላይ",
 
+    brandOtherName: "Onhand — በእጅዎ",
+    viewStockTitle: "ክምችት እና ዋጋ ይመልከቱ",
+    detailsBtn: "ዝርዝር",
+    hideDetailsBtn: "ደብቅ",
+    totalSoldAllTime: "በጠቅላላ የተሸጠ",
+    currentlyLeft: "አሁን በክምችት ውስጥ ያለ",
+    lastSold: "መጨረሻ የተሸጠበት",
+    neverSold: "እስካሁን አልተሸጠም",
+    barcodeLabel: "ባርኮድ",
+
     enterValidQuantity: "ትክክለኛ ብዛት ያስገቡ።",
     saleRecorded: "ተሽጧል",
     saleQueuedOffline: "ተሽጧል — ከመስመር ውጭ ተቀምጧል፣ ሲገናኙ ይመሳሰላል",
@@ -218,6 +238,22 @@ function applyTranslations() {
   document.documentElement.lang = currentLang === 'am' ? 'am' : 'en';
   const toggle = document.getElementById('langToggle');
   if (toggle) toggle.textContent = currentLang === 'en' ? 'አማርኛ' : 'English';
+
+  // Brand mark: "On"(ink)+"hand"(blue) <-> "በ"(ink)+"እጄ"(blue) — same
+  // two-tone pattern, just swapping which script it's written in.
+  const brandPart1 = document.getElementById('brandPart1');
+  const brandPart2 = document.getElementById('brandPart2');
+  if (brandPart1 && brandPart2) {
+    if (currentLang === 'am') {
+      brandPart1.textContent = 'በ';
+      brandPart2.textContent = 'እጄ';
+    } else {
+      brandPart1.textContent = 'On';
+      brandPart2.textContent = 'hand';
+    }
+  }
+  const brandSubtitle = document.getElementById('brandSubtitle');
+  if (brandSubtitle) brandSubtitle.textContent = t('brandOtherName');
 }
 
 function toggleLang() {

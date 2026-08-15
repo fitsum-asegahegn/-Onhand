@@ -5,17 +5,30 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Onhand — Sign In</title>
   <link rel="stylesheet" href="style.css">
+  <link rel="manifest" href="manifest.json">
+  <link rel="apple-touch-icon" href="apple-touch-icon.png">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <meta name="apple-mobile-web-app-title" content="Onhand">
+  <meta name="theme-color" content="#F7F3EA">
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script>
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', () => {
+        navigator.serviceWorker.register('/service-worker.js').catch(err => console.warn('SW registration failed:', err));
+      });
+    }
+  </script>
 </head>
-<body>
+<body data-page="auth">
 <div class="screen">
   <div style="display:flex; justify-content:flex-end; padding-top:10px;">
     <button class="lang-toggle" id="langToggle" onclick="toggleLang()">አማርኛ</button>
   </div>
 
   <div style="text-align:center; margin:20px 0 30px;">
-    <div class="brand" style="font-size:28px;">On<span style="color:#2563eb;">hand</span></div>
-    <p style="font-size:12px; color:var(--ink-soft); margin-top:4px;">በእጄ — In your hand</p>
+    <div class="brand" style="font-size:28px;"><span id="brandPart1">On</span><span id="brandPart2" style="color:#2563eb;">hand</span></div>
+    <p style="font-size:12px; color:var(--ink-soft); margin-top:4px;" id="brandSubtitle">በእጄ — In your hand</p>
     <p class="hint" style="margin-top:6px;" data-i18n="tagline"></p>
   </div>
 
