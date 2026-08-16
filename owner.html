@@ -1,41 +1,43 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Onhand — Owner Dashboard</title>
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="style.css">
-<link rel="stylesheet" href="layout-fixes.css">
-<link rel="stylesheet" href="style-additions.css">
-<link rel="manifest" href="manifest.json">
-<link rel="apple-touch-icon" href="apple-touch-icon.png">
-<meta name="apple-mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-status-bar-style" content="default">
-<meta name="apple-mobile-web-app-title" content="Onhand">
-<meta name="theme-color" content="#F7F3EA">
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-<script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.6/dist/JsBarcode.all.min.js"></script>
-<script>
-  if ('serviceWorker' in navigator) {
-    window.addEventListener('load', () => {
-      navigator.serviceWorker.register('/service-worker.js').catch(err => console.warn('SW registration failed:', err));
-    });
-  }
-</script>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Onhand — Owner Dashboard</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css">
+  <link rel="stylesheet" href="layout-fixes.css">
+  <link rel="stylesheet" href="style-additions.css">
+  <link rel="manifest" href="manifest.json">
+  <link rel="apple-touch-icon" href="apple-touch-icon.png">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <meta name="apple-mobile-web-app-title" content="Onhand">
+  <meta name="theme-color" content="#F7F3EA">
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.6/dist/JsBarcode.all.min.js"></script>
+  <script>
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', () => {
+        navigator.serviceWorker.register('/service-worker.js').catch(err => console.warn('SW registration failed:', err));
+      });
+    }
+  </script>
 </head>
 <body data-page="dashboard">
 <div class="screen">
-<!-- PRINT LOADING OVERLAY -->
-<div id="printLoadingOverlay" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(255,255,255,0.92); z-index:9999; flex-direction:column; align-items:center; justify-content:center; font-family: 'Inter', sans-serif;">
-  <div style="background:#fff; padding:30px 40px; border-radius:12px; box-shadow:0 8px 30px rgba(0,0,0,0.12); text-align:center; max-width:90%;">
-    <div style="width:40px; height:40px; border:4px solid #e0e0e0; border-top-color:#2563eb; border-radius:50%; animation:spin 0.8s linear infinite; margin:0 auto 16px;"></div>
-    <div style="font-size:18px; font-weight:600; margin-bottom:6px;" data-i18n="generatingLabels">Generating labels...</div>
-    <div style="font-size:14px; color:#666;" id="printProgressText">Preparing labels...</div>
-  </div>
-</div>
 
+  <!-- PRINT LOADING OVERLAY -->
+  <div id="printLoadingOverlay" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(255,255,255,0.92); z-index:9999; flex-direction:column; align-items:center; justify-content:center; font-family: 'Inter', sans-serif;">
+    <div style="background:#fff; padding:30px 40px; border-radius:12px; box-shadow:0 8px 30px rgba(0,0,0,0.12); text-align:center; max-width:90%;">
+      <div style="width:40px; height:40px; border:4px solid #e0e0e0; border-top-color:#2563eb; border-radius:50%; animation:spin 0.8s linear infinite; margin:0 auto 16px;"></div>
+      <div style="font-size:18px; font-weight:600; margin-bottom:6px;" data-i18n="generatingLabels">Generating labels...</div>
+      <div style="font-size:14px; color:#666;" id="printProgressText">Preparing labels...</div>
+    </div>
+  </div>
+
+  <!-- HEADER -->
   <header style="display:flex; justify-content:space-between; align-items:center; padding:16px 20px; border-bottom:1px solid var(--line);">
     <div>
       <div class="brand" style="font-size:26px; font-weight:700;"><span id="brandPart1">On</span><span id="brandPart2" style="color:#2563eb;">hand</span></div>
@@ -43,84 +45,84 @@
     </div>
     <div style="display:flex; align-items:center; gap:10px;">
       <button class="lang-toggle" id="langToggle" onclick="toggleLang()">አማርኛ</button>
-      <span style="font-size:12px; text-transform:uppercase; color:var(--ink-soft);" data-i18n="ownerBadge"></span>
-      <button onclick="signOut()" style="background:none; border:1px solid #ddd; padding:6px 14px; border-radius:6px; font-size:14px; cursor:pointer;" data-i18n="signOut"></button>
+      <span style="font-size:12px; text-transform:uppercase; color:var(--ink-soft);" data-i18n="ownerBadge">Owner</span>
+      <button onclick="signOut()" style="background:none; border:1px solid #ddd; padding:6px 14px; border-radius:6px; font-size:14px; cursor:pointer;" data-i18n="signOut">Sign out</button>
     </div>
   </header>
 
   <div id="offlineBanner" class="offline-banner">
     <span class="dot"></span>
-    <span data-i18n="offlineBanner"></span>
+    <span data-i18n="offlineBanner">You are offline</span>
     <span id="pendingCount"></span>
   </div>
 
   <div class="tag-card">
-    <span class="tag-label" data-i18n="yourShopCode"></span>
+    <span class="tag-label" data-i18n="yourShopCode">Your shop code</span>
     <div class="tag-value" id="shopCode" style="font-size:15px; word-break:break-all;">—</div>
-    <p class="tag-sub" data-i18n="shopCodeHint"></p>
+    <p class="tag-sub" data-i18n="shopCodeHint">Give this to a keeper so they can join your shop when they sign up.</p>
   </div>
 
-  <h2 class="section-title" data-i18n="salesOverview"></h2>
+  <h2 class="section-title" data-i18n="salesOverview">Sales Overview</h2>
   <div style="display:flex; gap:8px; margin-bottom:12px;">
-    <button class="btn-secondary period-btn active" data-period="today" style="flex:1; padding:9px;" data-i18n="today"></button>
-    <button class="btn-secondary period-btn" data-period="7" style="flex:1; padding:9px;" data-i18n="days7"></button>
-    <button class="btn-secondary period-btn" data-period="30" style="flex:1; padding:9px;" data-i18n="days30"></button>
+    <button class="btn-secondary period-btn active" data-period="today" style="flex:1; padding:9px;" data-i18n="today">Today</button>
+    <button class="btn-secondary period-btn" data-period="7" style="flex:1; padding:9px;" data-i18n="days7">7 days</button>
+    <button class="btn-secondary period-btn" data-period="30" style="flex:1; padding:9px;" data-i18n="days30">30 days</button>
   </div>
   <div class="stat-row triple">
     <div class="tag-card" style="margin-bottom:0;">
-      <span class="tag-label" data-i18n="revenue"></span>
+      <span class="tag-label" data-i18n="revenue">Revenue</span>
       <div class="tag-value" id="statRevenue">—</div>
     </div>
     <div class="tag-card" style="margin-bottom:0;">
-      <span class="tag-label" data-i18n="profit"></span>
+      <span class="tag-label" data-i18n="profit">Profit</span>
       <div class="tag-value good" id="statProfit">—</div>
     </div>
     <div class="tag-card" style="margin-bottom:0;">
-      <span class="tag-label" data-i18n="itemsSold"></span>
+      <span class="tag-label" data-i18n="itemsSold">Items sold</span>
       <div class="tag-value" id="statItems">—</div>
     </div>
   </div>
 
-  <h2 class="section-title" data-i18n="needsAttention"></h2>
-  <div id="alertsList"><p class="hint">…</p></div>
+  <h2 class="section-title" data-i18n="needsAttention">Needs Attention</h2>
+  <div id="alertsList"><p class="hint">Checking stock levels…</p></div>
 
-  <h2 class="section-title" data-i18n="addProduct"></h2>
-  <p class="hint" data-i18n="addProductHint"></p>
+  <h2 class="section-title" data-i18n="addProduct">Add a Product</h2>
+  <p class="hint" data-i18n="addProductHint">A barcode is generated automatically — print or screenshot the label after saving.</p>
   <div class="tag-card">
     <div class="field">
-      <label for="pName" data-i18n="productName"></label>
-      <input type="text" id="pName" data-i18n-placeholder="productNamePlaceholder">
+      <label for="pName" data-i18n="productName">Product name</label>
+      <input type="text" id="pName" placeholder="e.g. Sugar" data-i18n-placeholder="productNamePlaceholder">
     </div>
     <div class="field">
-      <label for="pUnit" data-i18n="soldBy"></label>
+      <label for="pUnit" data-i18n="soldBy">Sold by</label>
       <select id="pUnit">
-        <option value="piece" data-i18n="unitPiece"></option>
-        <option value="kg" data-i18n="unitKg"></option>
-        <option value="litre" data-i18n="unitLitre"></option>
-        <option value="pack" data-i18n="unitPack"></option>
+        <option value="piece" data-i18n="unitPiece">Piece</option>
+        <option value="kg" data-i18n="unitKg">Kilogram (kg)</option>
+        <option value="litre" data-i18n="unitLitre">Litre</option>
+        <option value="pack" data-i18n="unitPack">Pack</option>
       </select>
     </div>
     <div class="stat-row" style="margin-bottom:14px;">
       <div class="field" style="margin-bottom:0;">
-        <label for="pCost" data-i18n="costPrice"></label>
+        <label for="pCost" data-i18n="costPrice">Cost price (Birr)</label>
         <input type="number" id="pCost" min="0" step="0.5">
       </div>
       <div class="field" style="margin-bottom:0;">
-        <label for="pPrice" data-i18n="sellingPrice"></label>
+        <label for="pPrice" data-i18n="sellingPrice">Selling price (Birr)</label>
         <input type="number" id="pPrice" min="0" step="0.5">
       </div>
     </div>
     <div class="stat-row" style="margin-bottom:14px;">
       <div class="field" style="margin-bottom:0;">
-        <label for="pStock" data-i18n="openingStock"></label>
+        <label for="pStock" data-i18n="openingStock">Opening stock</label>
         <input type="number" id="pStock" min="0" step="0.5" value="0">
       </div>
       <div class="field" style="margin-bottom:0;">
-        <label for="pThreshold" data-i18n="lowStockBelow"></label>
+        <label for="pThreshold" data-i18n="lowStockBelow">Low stock alert below</label>
         <input type="number" id="pThreshold" min="0" step="0.5" value="5">
       </div>
     </div>
-    <button class="btn-primary" id="addProductBtn" data-i18n="saveGenerateBarcode"></button>
+    <button class="btn-primary" id="addProductBtn" data-i18n="saveGenerateBarcode">Save Product & Generate Barcode</button>
     <p id="duplicateWarning" style="display:none; background:rgba(193,68,59,.08); border-left:3px solid #c1443b; padding:10px 14px; border-radius:2px; font-size:13px; margin-top:12px;"></p>
     <div id="newBarcodeArea" style="display:none; margin-top:14px;">
       <div class="barcode-preview print-area" id="newBarcodePrintArea">
@@ -128,28 +130,27 @@
         <svg id="newBarcodeSvg"></svg>
       </div>
       <button class="btn-secondary" style="margin-top:10px;" onclick="window.print()">🖨️ Print Label</button>
-      <p class="hint" style="text-align:center; margin-top:0;" data-i18n="printLabelHint"></p>
+      <p class="hint" style="text-align:center; margin-top:0;" data-i18n="printLabelHint">Print this label and stick it on the product.</p>
     </div>
   </div>
 
-  <h2 class="section-title" data-i18n="batchUploadTitle"></h2>
-  <p class="hint" data-i18n="batchUploadHint"></p>
+  <h2 class="section-title" data-i18n="batchUploadTitle">Batch Upload (CSV)</h2>
+  <p class="hint" data-i18n="batchUploadHint">Add many products at once. Format: <code>name, unit, cost_price, selling_price, current_stock, low_stock_threshold</code>.<br>Example: <code>Sugar, kg, 90, 105, 50, 5</code><br>If your product name contains a comma, wrap it in quotes: <code>"Sugar, white", kg, 90, 105, 50, 5</code></p>
   <div class="tag-card">
     <div style="display:flex; gap:8px; flex-wrap:wrap; align-items:center;">
       <input type="file" id="csvFileInput" accept=".csv" style="flex:1; min-width:180px; padding:8px; border:1px solid var(--line); border-radius:6px; background:var(--card);">
-      <button class="btn-primary" id="uploadCsvBtn" style="width:auto; padding:11px 18px;" data-i18n="uploadSaveBtn"></button>
+      <button class="btn-primary" id="uploadCsvBtn" style="width:auto; padding:11px 18px;" data-i18n="uploadSaveBtn">Upload & Save</button>
     </div>
     <div id="csvStatus" style="margin-top:10px; font-size:13px;"></div>
   </div>
 
   <div style="display:flex; justify-content:space-between; align-items:center; margin-top:26px; margin-bottom:8px;">
-    <h2 class="section-title" style="margin:0;" data-i18n="yourProducts"></h2>
-    <button class="btn-secondary" id="printAllBtn" style="font-size:12.5px; padding:7px 14px; width:auto;">🖨️ <span data-i18n="printAllBtn"></span></button>
+    <h2 class="section-title" style="margin:0;" data-i18n="yourProducts">Your Products</h2>
+    <button class="btn-secondary" id="printAllBtn" style="font-size:12.5px; padding:7px 14px; width:auto;">🖨️ <span data-i18n="printAllBtn">Print All</span></button>
   </div>
-  <div id="productList"><p class="hint">…</p></div>
+  <div id="productList"><p class="hint">Loading products…</p></div>
 
-  <!-- Hidden print targets: made visible only by the @media print rules
-       in layout-fixes.css, never shown during normal browsing. -->
+  <!-- Hidden print targets -->
   <div id="quickPrintArea" class="print-area barcode-preview" style="display:none;">
     <div class="print-product-name" id="quickPrintName"></div>
     <svg id="quickPrintSvg"></svg>
@@ -213,9 +214,6 @@
         .order('name');
       if (error) throw error;
       allProducts = data || [];
-      // Local convenience cache only — localStorage is per-device, so this
-      // does NOT reach a keeper's phone. The keeper's own page fetches and
-      // caches its shop's products independently; see keeper.html.
       cacheProducts(profile.id, allProducts);
       renderProducts();
       renderAlerts();
@@ -265,10 +263,10 @@
     panel.style.display = 'block';
     label.textContent = t('hideDetailsBtn');
 
-    if (panel.dataset.loaded === '1') return; // already fetched — don't re-query every toggle
+    if (panel.dataset.loaded === '1') return;
 
     const product = allProducts.find(p => p.id === productId);
-    panel.innerHTML = '<p class="hint">…</p>';
+    panel.innerHTML = '<p class="hint">Loading details…</p>';
 
     try {
       const { data, error } = await supabase
@@ -344,13 +342,9 @@
     msg.style.display = 'block';
     setTimeout(() => { msg.style.display = 'none'; }, 2500);
 
-    // Force a fresh fetch next time this panel opens, and refresh the
-    // stock number shown on the collapsed row right away.
     const panel = document.getElementById('details-' + productId);
     panel.dataset.loaded = '0';
     await loadProducts();
-    // re-open with fresh numbers since loadProducts() re-renders (and
-    // therefore collapses) every row
     await toggleProductDetails(productId);
   }
 
@@ -374,10 +368,6 @@
     return d.innerHTML;
   }
 
-  // Random, not timestamp-based — a timestamp-derived code risks collisions
-  // when many rows are generated in a tight loop (exactly what CSV batch
-  // upload does), since the unique constraint on barcode would then reject
-  // the second row with the same millisecond-derived value.
   function generateBarcodeValue(){
     if (window.crypto && crypto.randomUUID) {
       return 'ONHAND' + crypto.randomUUID().replace(/-/g, '').slice(0, 12).toUpperCase();
@@ -399,10 +389,6 @@
 
     if (!name){ alert('Enter a product name.'); return; }
 
-    // A product with this name (any case) already exists — don't create a
-    // second barcode for the same item. Point back to the existing one so
-    // any new stock gets added there instead. This is the fix for "why did
-    // it duplicate Sugar instead of using the one already there."
     const existing = allProducts.find(p => p.name.trim().toLowerCase() === name.toLowerCase());
     if (existing) {
       warningEl.innerHTML = `<b>${escapeHtml(name)}</b> ${t('productAlreadyExists')} <span style="text-decoration:underline; cursor:pointer;" onclick="scrollToProductDetails('${existing.id}')">${t('scrollToExisting')}</span>`;
@@ -410,8 +396,6 @@
       return;
     }
 
-    // Guard against double-tap / double-submit creating two rows for one
-    // real product — the most common accidental source of duplicates.
     if (btn.disabled) return;
     btn.disabled = true;
 
@@ -455,69 +439,68 @@
   }
 
   // ===== PRINTING =====
-  // Both single and print-all reuse the same in-page @media print
-  // mechanism (see layout-fixes.css) — no popup windows, which are
-  // unreliable on mobile browsers (the main way this app is actually used)
-  // and would need their own copy of fonts/branding/JsBarcode to stay
-  // visually consistent with the rest of the app.
-
-  // ===== PRINTING =====
-function printAllLabels() {
-  if (!allProducts.length) {
-    alert('No products to print.');
-    return;
+  function printSingleProduct(productId){
+    const p = allProducts.find(x => x.id === productId);
+    if (!p) return;
+    document.getElementById('quickPrintName').textContent = p.name;
+    JsBarcode('#quickPrintSvg', p.barcode, { format: 'CODE128', height: 60, displayValue: true, fontSize: 12 });
+    setTimeout(() => {
+      window.print();
+    }, 250);
   }
 
-  const overlay = document.getElementById('printLoadingOverlay');
-  const progressText = document.getElementById('printProgressText');
+  function printAllLabels() {
+    if (!allProducts.length) {
+      alert('No products to print.');
+      return;
+    }
 
-  // 1. Show the overlay
-  overlay.style.display = 'flex';
-  progressText.textContent = `Generating ${allProducts.length} barcodes...`;
+    const overlay = document.getElementById('printLoadingOverlay');
+    const progressText = document.getElementById('printProgressText');
 
-  // 2. Short delay to let the UI update before heavy work
-  setTimeout(() => {
-    const area = document.getElementById('printAllArea');
-    area.innerHTML = '<div class="print-label-grid" id="printLabelGrid"></div>';
-    const grid = document.getElementById('printLabelGrid');
+    overlay.style.display = 'flex';
+    progressText.textContent = `Generating ${allProducts.length} barcodes...`;
 
-    // 3. Build the grid
-    allProducts.forEach(p => {
-      const div = document.createElement('div');
-      div.className = 'print-label';
-      div.innerHTML = `<svg id="printSvg-${p.id}"></svg><div class="print-product-name">${escapeHtml(p.name)}</div><div class="print-product-price">${Math.round(p.selling_price)} Birr</div>`;
-      grid.appendChild(div);
-    });
-
-    progressText.textContent = 'Rendering barcodes...';
-
-    // 4. Generate all barcodes
-    allProducts.forEach(p => {
-      JsBarcode('#printSvg-' + p.id, p.barcode, {
-        format: 'CODE128',
-        height: 40,
-        displayValue: true,
-        fontSize: 10
-      });
-    });
-
-    document.body.classList.add('print-all-mode');
-
-    // 5. Hide overlay and trigger print
     setTimeout(() => {
-      overlay.style.display = 'none';
-      window.print();
-    }, 500); // ← extra time for SVGs to fully paint on screen
+      const area = document.getElementById('printAllArea');
+      area.innerHTML = '<div class="print-label-grid" id="printLabelGrid"></div>';
+      const grid = document.getElementById('printLabelGrid');
 
-  }, 100);
-}
+      allProducts.forEach(p => {
+        const div = document.createElement('div');
+        div.className = 'print-label';
+        div.innerHTML = `<svg id="printSvg-${p.id}"></svg><div class="print-product-name">${escapeHtml(p.name)}</div><div class="print-product-price">${Math.round(p.selling_price)} Birr</div>`;
+        grid.appendChild(div);
+      });
+
+      progressText.textContent = 'Rendering barcodes...';
+
+      allProducts.forEach(p => {
+        JsBarcode('#printSvg-' + p.id, p.barcode, {
+          format: 'CODE128',
+          height: 40,
+          displayValue: true,
+          fontSize: 10
+        });
+      });
+
+      document.body.classList.add('print-all-mode');
+
+      setTimeout(() => {
+        overlay.style.display = 'none';
+        window.print();
+      }, 600);
+
+    }, 150);
+  }
+
+  window.onafterprint = () => {
+    document.body.classList.remove('print-all-mode');
+  };
+
+  document.getElementById('printAllBtn').addEventListener('click', printAllLabels);
 
   // ===== CSV BATCH UPLOAD =====
-  // Handles quoted fields so a product name containing a comma
-  // (e.g. "Sugar, white") doesn't get split into extra columns.
-  // Known limitation: doesn't handle an escaped quote *inside* a quoted
-  // field (e.g. a literal " character in a name) — an edge case unlikely
-  // for a shop product list, but worth knowing if a row looks wrong.
   function parseCSVLine(line){
     const matches = line.match(/(".*?"|[^,]+)(?=\s*,|\s*$)/g);
     if (!matches) return [];
@@ -610,6 +593,7 @@ function printAllLabels() {
     await loadProducts();
   });
 
+  // ===== ON LOAD =====
   (async () => {
     profile = await requireRole('owner');
     if (!profile) return;
@@ -619,4 +603,4 @@ function printAllLabels() {
   })();
 </script>
 </body>
-</html>
+  </html>
