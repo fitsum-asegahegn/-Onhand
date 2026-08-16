@@ -439,64 +439,97 @@
   }
 
   // ===== PRINTING =====
-  function printSingleProduct(productId){
-    const p = allProducts.find(x => x.id === productId);
-    if (!p) return;
-    document.getElementById('quickPrintName').textContent = p.name;
-    JsBarcode('#quickPrintSvg', p.barcode, { format: 'CODE128', height: 60, displayValue: true, fontSize: 12 });
-    setTimeout(() => {
-      window.print();
-    }, 250);
+  // ===== PRINTING =====
+function printSingleProduct(productId){
+  const p = allProducts.find(x => x.id === productId);
+  if (!p) return;
+
+  // Log to verify we have the right product
+  console.log('Printing single product:', p.name, p.barcode);
+
+  // Set the name and generate barcode with explicit width
+  document.getElementById('quickPrintName').textContent = p.name;
+  
+  // Clear and regenerate the barcode with explicit dimensions
+  const svg = document.getElementById('quickPrintSvg');
+  svg.innerHTML = ''; // Clear any previous content
+  
+  JsBarcode(svg, p.barcode, {
+    format: 'CODE128',
+    width: 2,
+    height: 80,
+    displayValue: true,
+    fontSize: 16,
+    margin: 5
+  });
+
+  // Wait for SVG to render
+  setTimeout(() => {
+    window.print();
+  }, 300);
+}
+
+function printAllLabels() {
+  if (!allProducts.length) {
+    alert('No products to print.');
+    return;
   }
 
-  function printAllLabels() {
-    if (!allProducts.length) {
-      alert('No products to print.');
-      return;
-    }
+  const overlay = document.getElementById('printLoadingOverlay');
+  const progressText = document.getElementById('printProgressText');
 
-    const overlay = document.getElementById('printLoadingOverlay');
-    const progressText = document.getElementById('printProgressText');
+  overlay.style.display = 'flex';
+  progressText.textContent = `Generating ${allProducts.length} barcodes...`;
 
-    overlay.style.display = 'flex';
-    progressText.textContent = `Generating ${allProducts.length} barcodes...`;
+  setTimeout(() => {
+    const area = document.getElementById('printAllArea');
+    area.innerHTML = '<div class="print-label-grid" id="printLabelGrid"></div>';
+    const grid = document.getElementById('printLabelGrid');
 
-    setTimeout(() => {
-      const area = document.getElementById('printAllArea');
-      area.innerHTML = '<div class="print-label-grid" id="printLabelGrid"></div>';
-      const grid = document.getElementById('printLabelGrid');
+    allProducts.forEach((p, index) => {
+      const div = document.createElement('div');
+      div.className = 'print-label';
+      // Use a unique ID with index to avoid conflicts
+      const svgId = 'printSvg-' + p.id + '-' + index;
+      div.innerHTML = `
+        <svg id="${svgId}" style="max-width:100%; height:auto;"></svg>
+        <div class="print-product-name">${escapeHtml(p.name)}</div>
+        <div class="print-product-price">${Math.round(p.selling_price)} Birr</div>
+      `;
+      grid.appendChild(div);
+    });
 
-      allProducts.forEach(p => {
-        const div = document.createElement('div');
-        div.className = 'print-label';
-        div.innerHTML = `<svg id="printSvg-${p.id}"></svg><div class="print-product-name">${escapeHtml(p.name)}</div><div class="print-product-price">${Math.round(p.selling_price)} Birr</div>`;
-        grid.appendChild(div);
-      });
+    progressText.textContent = 'Rendering barcodes...';
 
-      progressText.textContent = 'Rendering barcodes...';
-
-      allProducts.forEach(p => {
-        JsBarcode('#printSvg-' + p.id, p.barcode, {
+    // Generate all barcodes with a small delay between each
+    allProducts.forEach((p, index) => {
+      const svgId = 'printSvg-' + p.id + '-' + index;
+      const svg = document.getElementById(svgId);
+      if (svg) {
+        JsBarcode(svg, p.barcode, {
           format: 'CODE128',
-          height: 40,
+          width: 1.5,
+          height: 50,
           displayValue: true,
-          fontSize: 10
+          fontSize: 12,
+          margin: 3
         });
-      });
+      }
+    });
 
-      document.body.classList.add('print-all-mode');
+    document.body.classList.add('print-all-mode');
 
-      setTimeout(() => {
-        overlay.style.display = 'none';
-        window.print();
-      }, 600);
+    setTimeout(() => {
+      overlay.style.display = 'none';
+      window.print();
+    }, 700);
 
-    }, 150);
-  }
+  }, 150);
+}
 
-  window.onafterprint = () => {
-    document.body.classList.remove('print-all-mode');
-  };
+window.onafterprint = () => {
+  document.body.classList.remove('print-all-mode');
+};
 
   document.getElementById('printAllBtn').addEventListener('click', printAllLabels);
 
