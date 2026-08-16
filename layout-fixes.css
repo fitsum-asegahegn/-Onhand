@@ -40,7 +40,8 @@ input, select, textarea { min-width: 0; }
     font-family:var(--display); font-weight:700; font-size:20px; margin-bottom:10px;
   }
   #printRoot .print-label-grid{ display:grid; grid-template-columns:repeat(auto-fill, minmax(170px,1fr)); gap:16px; padding:0 20px; }
-  #printRoot .print-label{ text-align:center; padding:10px; border:1px solid #ccc; border-radius:6px; page-break-inside:avoid; }
+  #printRoot .print-label{ text-align:center; padding:10px; border:1px solid #ccc; border-radius:6px; page-break-inside:avoid; overflow:hidden; }
+  #printRoot .print-label svg{ max-width:100%; height:auto; display:block; margin:0 auto; }
   #printRoot .print-label .print-product-name{ font-size:13px; margin:4px 0 2px; }
   #printRoot .print-label .print-product-price{ font-size:11px; color:#555; }
 }
