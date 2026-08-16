@@ -7,8 +7,9 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="style.css">
-<link rel="stylesheet" href="layout-fixes.css">
 <link rel="stylesheet" href="style-additions.css">
+<link rel="stylesheet" href="responsive-desktop.css">
+<link rel="stylesheet" href="layout-fixes.css">
 <link rel="manifest" href="manifest.json">
 <link rel="apple-touch-icon" href="apple-touch-icon.png">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -62,7 +63,7 @@
     <p class="hint" style="margin:2px 0 10px;" data-i18n="scannerHint"></p>
     <div style="display:flex; gap:8px; align-items:center;">
       <input type="text" id="manualBarcode" data-i18n-placeholder="typeCodePlaceholder" style="flex:1;">
-      <button class="btn-primary" id="manualLookupBtn" style="flex:0 0 auto; padding:12px 18px;" data-i18n="find"></button>
+      <button class="btn-primary" id="manualLookupBtn" style="flex:0 0 auto; width:auto; padding:12px 18px;" data-i18n="find"></button>
     </div>
     <div class="scanner-ready" id="scannerReadyDot" style="display:none;">
       <span class="dot"></span> <span id="scannerReadyText"></span>

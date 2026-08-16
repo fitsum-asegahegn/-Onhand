@@ -7,8 +7,9 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="style.css">
-  <link rel="stylesheet" href="layout-fixes.css">
   <link rel="stylesheet" href="style-additions.css">
+  <link rel="stylesheet" href="responsive-desktop.css">
+  <link rel="stylesheet" href="layout-fixes.css">
   <link rel="manifest" href="manifest.json">
   <link rel="apple-touch-icon" href="apple-touch-icon.png">
   <meta name="apple-mobile-web-app-capable" content="yes">
@@ -84,7 +85,7 @@
   </div>
 
   <h2 class="section-title" data-i18n="needsAttention">Needs Attention</h2>
-  <div id="alertsList"><p class="hint">Checking stock levels…</p></div>
+  <div id="alertsList"><p class="hint">Checking stock levels...</p></div>
 
   <h2 class="section-title" data-i18n="addProduct">Add a Product</h2>
   <p class="hint" data-i18n="addProductHint">A barcode is generated automatically — print or screenshot the label after saving.</p>
@@ -148,7 +149,7 @@
     <h2 class="section-title" style="margin:0;" data-i18n="yourProducts">Your Products</h2>
     <button class="btn-secondary" id="printAllBtn" style="font-size:12.5px; padding:7px 14px; width:auto;">🖨️ <span data-i18n="printAllBtn">Print All</span></button>
   </div>
-  <div id="productList"><p class="hint">Loading products…</p></div>
+  <div id="productList"><p class="hint">Loading products...</p></div>
 
   <!-- Hidden print targets -->
   <div id="quickPrintArea" class="print-area barcode-preview" style="display:none;">
@@ -266,7 +267,7 @@
     if (panel.dataset.loaded === '1') return;
 
     const product = allProducts.find(p => p.id === productId);
-    panel.innerHTML = '<p class="hint">Loading details…</p>';
+    panel.innerHTML = '<p class="hint">Loading details...</p>';
 
     try {
       const { data, error } = await supabase
@@ -439,98 +440,74 @@
   }
 
   // ===== PRINTING =====
-  // ===== PRINTING =====
-function printSingleProduct(productId){
-  const p = allProducts.find(x => x.id === productId);
-  if (!p) return;
+  // Two fixes from the previous version:
+  // 1. Replaced guessed setTimeout delays (150/300/700ms) with a "wait for
+  //    two real paint frames" pattern — reliably fast on a quick device,
+  //    reliably enough time on a slow one, instead of a fixed guess that's
+  //    wrong in one direction or the other depending on the phone.
+  // 2. Added closeAllDetailPanels(): if a product's Details panel was left
+  //    open (it also carries the .print-area class) and you then quick-print
+  //    a DIFFERENT product, both would satisfy the print CSS's visibility
+  //    rule simultaneously and overlap on the printed page.
 
-  // Log to verify we have the right product
-  console.log('Printing single product:', p.name, p.barcode);
-
-  // Set the name and generate barcode with explicit width
-  document.getElementById('quickPrintName').textContent = p.name;
-  
-  // Clear and regenerate the barcode with explicit dimensions
-  const svg = document.getElementById('quickPrintSvg');
-  svg.innerHTML = ''; // Clear any previous content
-  
-  JsBarcode(svg, p.barcode, {
-    format: 'CODE128',
-    width: 2,
-    height: 80,
-    displayValue: true,
-    fontSize: 16,
-    margin: 5
-  });
-
-  // Wait for SVG to render
-  setTimeout(() => {
-    window.print();
-  }, 300);
-}
-
-function printAllLabels() {
-  if (!allProducts.length) {
-    alert('No products to print.');
-    return;
+  function closeAllDetailPanels(){
+    document.querySelectorAll('[id^="details-"]').forEach(panel => { panel.style.display = 'none'; });
+    document.querySelectorAll('[id^="toggleLabel-"]').forEach(label => { label.textContent = t('detailsBtn'); });
   }
 
-  const overlay = document.getElementById('printLoadingOverlay');
-  const progressText = document.getElementById('printProgressText');
+  function afterPaint(callback){
+    requestAnimationFrame(() => requestAnimationFrame(callback));
+  }
 
-  overlay.style.display = 'flex';
-  progressText.textContent = `Generating ${allProducts.length} barcodes...`;
+  function printSingleProduct(productId){
+    const p = allProducts.find(x => x.id === productId);
+    if (!p) return;
 
-  setTimeout(() => {
-    const area = document.getElementById('printAllArea');
-    area.innerHTML = '<div class="print-label-grid" id="printLabelGrid"></div>';
-    const grid = document.getElementById('printLabelGrid');
+    closeAllDetailPanels();
 
-    allProducts.forEach((p, index) => {
-      const div = document.createElement('div');
-      div.className = 'print-label';
-      // Use a unique ID with index to avoid conflicts
-      const svgId = 'printSvg-' + p.id + '-' + index;
-      div.innerHTML = `
-        <svg id="${svgId}" style="max-width:100%; height:auto;"></svg>
-        <div class="print-product-name">${escapeHtml(p.name)}</div>
-        <div class="print-product-price">${Math.round(p.selling_price)} Birr</div>
-      `;
-      grid.appendChild(div);
+    document.getElementById('quickPrintName').textContent = p.name;
+    const svg = document.getElementById('quickPrintSvg');
+    svg.innerHTML = '';
+    JsBarcode(svg, p.barcode, { format: 'CODE128', width: 2, height: 80, displayValue: true, fontSize: 16, margin: 5 });
+
+    afterPaint(() => window.print());
+  }
+
+  function printAllLabels(){
+    if (!allProducts.length) { alert('No products to print.'); return; }
+
+    closeAllDetailPanels();
+
+    const overlay = document.getElementById('printLoadingOverlay');
+    const progressText = document.getElementById('printProgressText');
+    overlay.style.display = 'flex';
+    progressText.textContent = `Generating ${allProducts.length} label(s)…`;
+
+    afterPaint(() => {
+      const area = document.getElementById('printAllArea');
+      area.innerHTML = '<div class="print-label-grid" id="printLabelGrid"></div>';
+      const grid = document.getElementById('printLabelGrid');
+
+      allProducts.forEach(p => {
+        const div = document.createElement('div');
+        div.className = 'print-label';
+        div.innerHTML = `<svg id="printSvg-${p.id}"></svg><div class="print-product-name">${escapeHtml(p.name)}</div><div class="print-product-price">${Math.round(p.selling_price)} Birr</div>`;
+        grid.appendChild(div);
+      });
+      allProducts.forEach(p => {
+        JsBarcode('#printSvg-' + p.id, p.barcode, { format: 'CODE128', width: 1.5, height: 50, displayValue: true, fontSize: 12, margin: 3 });
+      });
+
+      document.body.classList.add('print-all-mode');
+
+      afterPaint(() => {
+        overlay.style.display = 'none';
+        window.print();
+      });
     });
+  }
 
-    progressText.textContent = 'Rendering barcodes...';
-
-    // Generate all barcodes with a small delay between each
-    allProducts.forEach((p, index) => {
-      const svgId = 'printSvg-' + p.id + '-' + index;
-      const svg = document.getElementById(svgId);
-      if (svg) {
-        JsBarcode(svg, p.barcode, {
-          format: 'CODE128',
-          width: 1.5,
-          height: 50,
-          displayValue: true,
-          fontSize: 12,
-          margin: 3
-        });
-      }
-    });
-
-    document.body.classList.add('print-all-mode');
-
-    setTimeout(() => {
-      overlay.style.display = 'none';
-      window.print();
-    }, 700);
-
-  }, 150);
-}
-
-window.onafterprint = () => {
-  document.body.classList.remove('print-all-mode');
-};
-
+  window.onafterprint = () => { document.body.classList.remove('print-all-mode'); };
   document.getElementById('printAllBtn').addEventListener('click', printAllLabels);
 
   // ===== CSV BATCH UPLOAD =====
@@ -544,7 +521,7 @@ window.onafterprint = () => {
     const fileInput = document.getElementById('csvFileInput');
     const status = document.getElementById('csvStatus');
     status.style.color = 'var(--ink-soft)';
-    status.textContent = 'Reading file…';
+    status.textContent = 'Reading file...';
 
     if (!fileInput.files.length) {
       status.textContent = 'Please select a CSV file.';
@@ -604,7 +581,7 @@ window.onafterprint = () => {
       return;
     }
 
-    status.textContent = `Uploading ${products.length} product(s)…`;
+    status.textContent = `Uploading ${products.length} product(s)...`;
 
     const batchSize = 50;
     let successCount = 0;
