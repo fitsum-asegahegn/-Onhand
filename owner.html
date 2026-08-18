@@ -18,6 +18,7 @@
   <meta name="theme-color" content="#F7F3EA">
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.6/dist/JsBarcode.all.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
   <script>
     if ('serviceWorker' in navigator) {
       window.addEventListener('load', () => {
@@ -81,6 +82,23 @@
     <div class="tag-card" style="margin-bottom:0;">
       <span class="tag-label" data-i18n="itemsSold">Items sold</span>
       <div class="tag-value" id="statItems">—</div>
+    </div>
+  </div>
+
+  <div style="display:flex; flex-wrap:wrap; gap:16px; margin-bottom:16px;">
+    <div class="tag-card" style="flex:1 1 340px; margin-bottom:0;">
+      <span class="tag-label" data-i18n="revenueTrend">Revenue Trend</span>
+      <div style="position:relative; height:180px; margin-top:10px;">
+        <canvas id="revenueTrendChart"></canvas>
+      </div>
+      <p class="hint" id="revenueTrendEmpty" style="display:none; text-align:center; margin-top:10px;" data-i18n="notEnoughTrendData">Not enough sales yet to show a trend.</p>
+    </div>
+    <div class="tag-card" style="flex:1 1 340px; margin-bottom:0;">
+      <span class="tag-label" data-i18n="topProducts">Top Products</span>
+      <div style="position:relative; height:180px; margin-top:10px;">
+        <canvas id="topProductsChart"></canvas>
+      </div>
+      <p class="hint" id="topProductsEmpty" style="display:none; text-align:center; margin-top:10px;" data-i18n="notEnoughSalesData">No sales recorded in this period yet.</p>
     </div>
   </div>
 
@@ -177,11 +195,108 @@
     return now;
   }
 
+  let revenueTrendChart = null;
+  let topProductsChart = null;
+
+  const CHART_GOLD = '#D9A62E';
+  const CHART_BLUE = '#2563eb';
+  const CHART_INK = '#1F2A24';
+  const CHART_LINE = '#E2DACB';
+
+  function dayKey(d){ return new Date(d).toISOString().slice(0,10); }
+  function dayLabel(k){ const d = new Date(k); return d.toLocaleDateString('en-US', { month:'short', day:'numeric' }); }
+
+  function renderRevenueTrend(sales, period){
+    const canvas = document.getElementById('revenueTrendChart');
+    const emptyMsg = document.getElementById('revenueTrendEmpty');
+
+    if (period === 'today' || !sales.length){
+      canvas.style.display = 'none';
+      emptyMsg.style.display = 'block';
+      if (revenueTrendChart) { revenueTrendChart.destroy(); revenueTrendChart = null; }
+      return;
+    }
+    canvas.style.display = 'block';
+    emptyMsg.style.display = 'none';
+
+    const byDay = {};
+    sales.forEach(s => {
+      const k = dayKey(s.sold_at);
+      byDay[k] = (byDay[k] || 0) + s.quantity * s.unit_price_at_sale;
+    });
+    const days = Object.keys(byDay).sort();
+
+    if (revenueTrendChart) revenueTrendChart.destroy();
+    revenueTrendChart = new Chart(canvas, {
+      type: 'bar',
+      data: {
+        labels: days.map(dayLabel),
+        datasets: [{ data: days.map(k => Math.round(byDay[k])), backgroundColor: CHART_GOLD, borderRadius: 3, maxBarThickness: 28 }]
+      },
+      options: {
+        responsive: true, maintainAspectRatio: false,
+        plugins: { legend: { display: false }, tooltip: { callbacks: { label: (ctx) => ctx.parsed.y.toLocaleString('en-US') + ' Birr' } } },
+        scales: {
+          x: { grid: { display: false }, ticks: { color: CHART_INK, font: { size: 10 } } },
+          y: { grid: { color: CHART_LINE }, ticks: { color: CHART_INK, font: { size: 10 } } }
+        }
+      }
+    });
+  }
+
+  function renderTopProducts(sales){
+    const canvas = document.getElementById('topProductsChart');
+    const emptyMsg = document.getElementById('topProductsEmpty');
+
+    if (!sales.length){
+      canvas.style.display = 'none';
+      emptyMsg.style.display = 'block';
+      if (topProductsChart) { topProductsChart.destroy(); topProductsChart = null; }
+      return;
+    }
+
+    const byProduct = {};
+    sales.forEach(s => {
+      byProduct[s.product_id] = (byProduct[s.product_id] || 0) + Number(s.quantity);
+    });
+    const productMap = Object.fromEntries(allProducts.map(p => [p.id, p.name]));
+    const top = Object.entries(byProduct)
+      .map(([id, qty]) => ({ name: productMap[id] || '—', qty }))
+      .sort((a,b) => b.qty - a.qty)
+      .slice(0, 6);
+
+    if (!top.length){
+      canvas.style.display = 'none';
+      emptyMsg.style.display = 'block';
+      if (topProductsChart) { topProductsChart.destroy(); topProductsChart = null; }
+      return;
+    }
+    canvas.style.display = 'block';
+    emptyMsg.style.display = 'none';
+
+    if (topProductsChart) topProductsChart.destroy();
+    topProductsChart = new Chart(canvas, {
+      type: 'bar',
+      data: {
+        labels: top.map(t => t.name),
+        datasets: [{ data: top.map(t => t.qty), backgroundColor: CHART_BLUE, borderRadius: 3, maxBarThickness: 22 }]
+      },
+      options: {
+        indexAxis: 'y', responsive: true, maintainAspectRatio: false,
+        plugins: { legend: { display: false } },
+        scales: {
+          x: { grid: { color: CHART_LINE }, ticks: { color: CHART_INK, font: { size: 10 }, precision: 0 } },
+          y: { grid: { display: false }, ticks: { color: CHART_INK, font: { size: 11 } } }
+        }
+      }
+    });
+  }
+
   async function loadStats(period){
     const since = periodStartDate(period).toISOString();
     const { data, error } = await supabase
       .from('sales')
-      .select('quantity, unit_price_at_sale, cost_price_at_sale')
+      .select('quantity, unit_price_at_sale, cost_price_at_sale, product_id, sold_at')
       .eq('owner_id', profile.id)
       .gte('sold_at', since);
     if (error) { console.error(error); return; }
@@ -195,6 +310,9 @@
     document.getElementById('statRevenue').textContent = fmtBirr(revenue);
     document.getElementById('statProfit').textContent = fmtBirr(profitTotal);
     document.getElementById('statItems').textContent = items.toLocaleString('en-US');
+
+    renderRevenueTrend(data, period);
+    renderTopProducts(data);
   }
 
   document.querySelectorAll('.period-btn').forEach(btn => {
@@ -605,8 +723,8 @@
     profile = await requireRole('owner');
     if (!profile) return;
     document.getElementById('shopCode').textContent = profile.id;
-    await loadStats('today');
     await loadProducts();
+    await loadStats('today');
   })();
 </script>
 </body>
