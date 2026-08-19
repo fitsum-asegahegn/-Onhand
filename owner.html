@@ -41,15 +41,8 @@
 
   <!-- HEADER -->
   <header style="display:flex; justify-content:space-between; align-items:center; padding:16px 20px; border-bottom:1px solid var(--line);">
-    <div>
-      <div class="brand" style="font-size:26px; font-weight:700;"><span id="brandPart1">On</span><span id="brandPart2" style="color:#2563eb;">hand</span></div>
-      <div style="font-size:10px; color:var(--ink-soft); letter-spacing:0.05em;" id="brandSubtitle">በእጄ</div>
-    </div>
-    <div style="display:flex; align-items:center; gap:10px;">
-      <button class="lang-toggle" id="langToggle" onclick="toggleLang()">አማርኛ</button>
-      <span style="font-size:12px; text-transform:uppercase; color:var(--ink-soft);" data-i18n="ownerBadge">Owner</span>
-      <button onclick="signOut()" style="background:none; border:1px solid #ddd; padding:6px 14px; border-radius:6px; font-size:14px; cursor:pointer;" data-i18n="signOut">Sign out</button>
-    </div>
+    <div class="brand" style="font-size:26px; font-weight:700;"><span id="brandPart1">On</span><span id="brandPart2" style="color:#2563eb;">hand</span></div>
+    <span style="font-size:12px; text-transform:uppercase; color:var(--ink-soft);" data-i18n="ownerBadge">Owner</span>
   </header>
 
   <div id="offlineBanner" class="offline-banner">
@@ -58,11 +51,8 @@
     <span id="pendingCount"></span>
   </div>
 
-  <div class="tag-card">
-    <span class="tag-label" data-i18n="yourShopCode">Your shop code</span>
-    <div class="tag-value" id="shopCode" style="font-size:15px; word-break:break-all;">—</div>
-    <p class="tag-sub" data-i18n="shopCodeHint">Give this to a keeper so they can join your shop when they sign up.</p>
-  </div>
+  <!-- ============ TAB: DASHBOARD ============ -->
+  <div id="tabDashboard" class="tab-page active">
 
   <h2 class="section-title" data-i18n="salesOverview">Sales Overview</h2>
   <div style="display:flex; gap:8px; margin-bottom:12px;">
@@ -104,6 +94,12 @@
 
   <h2 class="section-title" data-i18n="needsAttention">Needs Attention</h2>
   <div id="alertsList"><p class="hint">Checking stock levels...</p></div>
+
+  </div>
+  <!-- ============ /TAB: DASHBOARD ============ -->
+
+  <!-- ============ TAB: PRODUCTS ============ -->
+  <div id="tabProducts" class="tab-page">
 
   <h2 class="section-title" data-i18n="addProduct">Add a Product</h2>
   <p class="hint" data-i18n="addProductHint">A barcode is generated automatically — print or screenshot the label after saving.</p>
@@ -169,6 +165,42 @@
   </div>
   <div id="productList"><p class="hint">Loading products...</p></div>
 
+  </div>
+  <!-- ============ /TAB: PRODUCTS ============ -->
+
+  <!-- ============ TAB: SETTINGS ============ -->
+  <div id="tabSettings" class="tab-page">
+
+  <div class="tag-card">
+    <span class="tag-label" data-i18n="yourShopCode">Your shop code</span>
+    <div class="tag-value" id="shopCode" style="font-size:15px; word-break:break-all;">—</div>
+    <p class="tag-sub" data-i18n="shopCodeHint">Give this to a keeper so they can join your shop when they sign up.</p>
+  </div>
+
+  <div class="tag-card">
+    <span class="tag-label" data-i18n="languageLabel">Language</span>
+    <div style="margin-top:10px;">
+      <button class="lang-toggle" id="langToggle" onclick="toggleLang()">አማርኛ</button>
+    </div>
+  </div>
+
+  <button class="btn-secondary" onclick="signOut()" style="width:100%;" data-i18n="signOut">Sign out</button>
+
+  </div>
+  <!-- ============ /TAB: SETTINGS ============ -->
+
+  <nav class="bottom-nav">
+    <button id="navBtnDashboard" class="active" onclick="showTab('Dashboard')">
+      <span class="icon">📊</span><span data-i18n="navDashboard">Dashboard</span>
+    </button>
+    <button id="navBtnProducts" onclick="showTab('Products')">
+      <span class="icon">📦</span><span data-i18n="navProducts">Products</span>
+    </button>
+    <button id="navBtnSettings" onclick="showTab('Settings')">
+      <span class="icon">⚙️</span><span data-i18n="navSettings">Settings</span>
+    </button>
+  </nav>
+
 </div>
 
 <!-- Single dedicated print target — lives OUTSIDE .screen on purpose.
@@ -184,6 +216,14 @@
 <script>
   let profile = null;
   let allProducts = [];
+
+  function showTab(name){
+    document.querySelectorAll('.tab-page').forEach(el => el.classList.remove('active'));
+    document.getElementById('tab' + name).classList.add('active');
+    document.querySelectorAll('.bottom-nav button').forEach(b => b.classList.remove('active'));
+    document.getElementById('navBtn' + name).classList.add('active');
+    window.scrollTo(0, 0);
+  }
 
   function fmtBirr(n){ return Math.round(n).toLocaleString('en-US') + ' Birr'; }
 
