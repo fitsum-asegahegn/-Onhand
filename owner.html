@@ -18,6 +18,7 @@
   <meta name="theme-color" content="#F7F3EA">
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.6/dist/JsBarcode.all.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
   <script>
     if ('serviceWorker' in navigator) {
@@ -100,6 +101,69 @@
 
   <!-- ============ TAB: PRODUCTS ============ -->
   <div id="tabProducts" class="tab-page">
+
+  <h2 class="section-title" data-i18n="registerExistingTitle">Register an Existing Product</h2>
+  <p class="hint" data-i18n="registerExistingHint">Already has a barcode from the manufacturer? Scan it instead of printing a new one — it works exactly like your own barcodes from then on.</p>
+  <div class="tag-card">
+    <button class="scan-button" id="startRegisterScanBtn" style="margin-bottom:0;">
+      📷 <span data-i18n="scanToRegister">Scan to Register</span>
+      <span class="sub" data-i18n="tapToOpenCamera">Tap to open the camera</span>
+    </button>
+    <div id="registerReader" style="display:none; margin:12px 0 0;"></div>
+    <div id="registerScanControls" style="display:none; gap:10px; margin-top:12px;">
+      <button class="btn-secondary" id="stopRegisterScanBtn" style="flex:1;" data-i18n="cancelScan">Cancel Scan</button>
+      <button class="btn-secondary" id="registerTorchBtn" style="flex:1; display:none;">💡 <span data-i18n="torch">Torch</span></button>
+    </div>
+
+    <div style="display:flex; gap:8px; align-items:center; margin-top:14px;">
+      <input type="text" id="manualRegisterBarcode" data-i18n-placeholder="orTypeBarcodePlaceholder" placeholder="Or type the barcode" style="flex:1;">
+      <button class="btn-primary" id="manualRegisterBtn" style="flex:0 0 auto; width:auto; padding:12px 18px;" data-i18n="find">Find</button>
+    </div>
+
+    <p id="registerDuplicateMsg" style="display:none; background:rgba(217,166,46,.12); border-left:3px solid var(--accent-dark); padding:10px 14px; border-radius:2px; font-size:13px; margin-top:12px;"></p>
+
+    <div id="registerForm" style="display:none; margin-top:16px; border-top:1px solid var(--line); padding-top:16px;">
+      <p class="hint" style="margin-top:0;"><span data-i18n="barcodeLabel">Barcode</span>: <b id="registerBarcodeDisplay" style="color:var(--ink);"></b></p>
+      <p id="registerNameWarning" style="display:none; background:rgba(193,68,59,.08); border-left:3px solid #c1443b; padding:10px 14px; border-radius:2px; font-size:13px; margin-bottom:14px;"></p>
+      <div class="field">
+        <label data-i18n="productName">Product name</label>
+        <input type="text" id="regName" data-i18n-placeholder="productNamePlaceholder" placeholder="e.g. Sugar">
+      </div>
+      <div class="field">
+        <label data-i18n="soldBy">Sold by</label>
+        <select id="regUnit">
+          <option value="piece" data-i18n="unitPiece">Piece</option>
+          <option value="kg" data-i18n="unitKg">Kilogram (kg)</option>
+          <option value="litre" data-i18n="unitLitre">Litre</option>
+          <option value="pack" data-i18n="unitPack">Pack</option>
+        </select>
+      </div>
+      <div class="stat-row" style="margin-bottom:14px;">
+        <div class="field" style="margin-bottom:0;">
+          <label data-i18n="costPrice">Cost price (Birr)</label>
+          <input type="number" id="regCost" min="0" step="0.5">
+        </div>
+        <div class="field" style="margin-bottom:0;">
+          <label data-i18n="sellingPrice">Selling price (Birr)</label>
+          <input type="number" id="regPrice" min="0" step="0.5">
+        </div>
+      </div>
+      <div class="stat-row" style="margin-bottom:14px;">
+        <div class="field" style="margin-bottom:0;">
+          <label data-i18n="openingStock">Opening stock</label>
+          <input type="number" id="regStock" min="0" step="0.5" value="0">
+        </div>
+        <div class="field" style="margin-bottom:0;">
+          <label data-i18n="lowStockBelow">Low stock alert below</label>
+          <input type="number" id="regThreshold" min="0" step="0.5" value="5">
+        </div>
+      </div>
+      <div style="display:flex; gap:10px;">
+        <button class="btn-secondary" id="cancelRegisterBtn" style="flex:1;" data-i18n="cancel">Cancel</button>
+        <button class="btn-primary" id="saveRegisterBtn" style="flex:1;" data-i18n="saveProductBtn">Save Product</button>
+      </div>
+    </div>
+  </div>
 
   <h2 class="section-title" data-i18n="addProduct">Add a Product</h2>
   <p class="hint" data-i18n="addProductHint">A barcode is generated automatically — print or screenshot the label after saving.</p>
@@ -597,6 +661,180 @@
     const panel = document.getElementById('details-' + productId);
     if (panel.style.display !== 'block') toggleProductDetails(productId);
   }
+
+  // ===== REGISTER EXISTING PRODUCT (scan a real manufacturer barcode) =====
+  // Unlike the "Add a Product" form (which always generates a fresh
+  // ONHAND-xxxx barcode), this flow uses the barcode that's ALREADY on
+  // the product's packaging. Requires the per-shop unique constraint
+  // (fix-barcode-scope.sql) — a global unique barcode constraint would
+  // wrongly reject the same real-world product being registered in two
+  // different shops.
+
+  let registerScanner = null;
+  let registerTorchOn = false;
+  let scannedRegisterBarcode = null;
+
+  async function startRegisterScanner(){
+    try {
+      document.getElementById('registerReader').style.display = 'block';
+      document.getElementById('registerScanControls').style.display = 'flex';
+      document.getElementById('startRegisterScanBtn').style.display = 'none';
+
+      registerScanner = new Html5Qrcode("registerReader", {
+        // Real manufacturer barcodes are almost always EAN-13/UPC-A, not
+        // the CODE_128 format Onhand's own generated barcodes use — this
+        // list covers both, so re-scanning an existing Onhand label here
+        // (to trigger the "already registered" path) also works.
+        formatsToSupport: [
+          Html5QrcodeSupportedFormats.EAN_13,
+          Html5QrcodeSupportedFormats.EAN_8,
+          Html5QrcodeSupportedFormats.UPC_A,
+          Html5QrcodeSupportedFormats.UPC_E,
+          Html5QrcodeSupportedFormats.CODE_128
+        ],
+        useBarCodeDetectorIfSupported: true,
+        verbose: false
+      });
+
+      await registerScanner.start(
+        { facingMode: "environment" },
+        {
+          fps: 15,
+          qrbox: function(viewfinderWidth) {
+            var w = Math.floor(Math.min(viewfinderWidth * 0.85, 380));
+            return { width: w, height: Math.floor(w * 0.5) };
+          }
+        },
+        (decodedText) => { stopRegisterScanner(); handleScannedBarcode(decodedText); }
+      );
+
+      try {
+        const capabilities = registerScanner.getRunningTrackCapabilities();
+        if (capabilities && capabilities.torch) {
+          document.getElementById('registerTorchBtn').style.display = 'block';
+        }
+      } catch (e) { /* not supported — fine */ }
+    } catch (e) {
+      alert('Could not open camera. Check permissions.');
+      await stopRegisterScanner();
+    }
+  }
+
+  document.getElementById('registerTorchBtn').addEventListener('click', async () => {
+    if (!registerScanner) return;
+    try {
+      registerTorchOn = !registerTorchOn;
+      await registerScanner.applyVideoConstraints({ advanced: [{ torch: registerTorchOn }] });
+    } catch (e) { /* torch not available — silently ignore, matches keeper.html pattern */ }
+  });
+
+  async function stopRegisterScanner(){
+    if (registerScanner){
+      try { await registerScanner.stop(); await registerScanner.clear(); } catch (e) {}
+      registerScanner = null;
+    }
+    registerTorchOn = false;
+    document.getElementById('registerReader').style.display = 'none';
+    document.getElementById('registerScanControls').style.display = 'none';
+    document.getElementById('registerTorchBtn').style.display = 'none';
+    document.getElementById('startRegisterScanBtn').style.display = 'block';
+  }
+
+  document.getElementById('startRegisterScanBtn').addEventListener('click', startRegisterScanner);
+  document.getElementById('stopRegisterScanBtn').addEventListener('click', stopRegisterScanner);
+
+  document.getElementById('manualRegisterBtn').addEventListener('click', () => {
+    const code = document.getElementById('manualRegisterBarcode').value.trim();
+    if (!code) return;
+    document.getElementById('manualRegisterBarcode').value = '';
+    handleScannedBarcode(code);
+  });
+  document.getElementById('manualRegisterBarcode').addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') { e.preventDefault(); document.getElementById('manualRegisterBtn').click(); }
+  });
+
+  function handleScannedBarcode(code){
+    const dupMsg = document.getElementById('registerDuplicateMsg');
+    dupMsg.style.display = 'none';
+
+    const existing = allProducts.find(p => p.barcode === code);
+    if (existing){
+      dupMsg.innerHTML = `<b>${escapeHtml(existing.name)}</b> ${t('barcodeAlreadyRegistered')} <span style="text-decoration:underline; cursor:pointer;" onclick="showTab('Products'); scrollToProductDetails('${existing.id}')">${t('scrollToExisting')}</span>`;
+      dupMsg.style.display = 'block';
+      document.getElementById('registerForm').style.display = 'none';
+      return;
+    }
+    openRegisterForm(code);
+  }
+
+  function openRegisterForm(barcode){
+    scannedRegisterBarcode = barcode;
+    document.getElementById('registerBarcodeDisplay').textContent = barcode;
+    document.getElementById('registerNameWarning').style.display = 'none';
+    document.getElementById('regName').value = '';
+    document.getElementById('regCost').value = '';
+    document.getElementById('regPrice').value = '';
+    document.getElementById('regStock').value = '0';
+    document.getElementById('regThreshold').value = '5';
+    document.getElementById('registerForm').style.display = 'block';
+    document.getElementById('regName').focus();
+  }
+
+  document.getElementById('cancelRegisterBtn').addEventListener('click', () => {
+    document.getElementById('registerForm').style.display = 'none';
+    scannedRegisterBarcode = null;
+  });
+
+  document.getElementById('saveRegisterBtn').addEventListener('click', async () => {
+    const btn = document.getElementById('saveRegisterBtn');
+    const warningEl = document.getElementById('registerNameWarning');
+    warningEl.style.display = 'none';
+
+    const name = document.getElementById('regName').value.trim();
+    const unit = document.getElementById('regUnit').value;
+    const cost = parseFloat(document.getElementById('regCost').value) || 0;
+    const price = parseFloat(document.getElementById('regPrice').value) || 0;
+    const stock = parseFloat(document.getElementById('regStock').value) || 0;
+    const threshold = parseFloat(document.getElementById('regThreshold').value) || 0;
+
+    if (!name){ alert('Enter a product name.'); return; }
+    if (!scannedRegisterBarcode){ alert('Scan or type a barcode first.'); return; }
+
+    const existingName = allProducts.find(p => p.name.trim().toLowerCase() === name.toLowerCase());
+    if (existingName){
+      warningEl.innerHTML = `<b>${escapeHtml(name)}</b> ${t('productAlreadyExists')} <span style="text-decoration:underline; cursor:pointer;" onclick="document.getElementById('registerForm').style.display='none'; scrollToProductDetails('${existingName.id}')">${t('scrollToExisting')}</span>`;
+      warningEl.style.display = 'block';
+      return;
+    }
+
+    if (btn.disabled) return;
+    btn.disabled = true;
+
+    try {
+      const { error } = await supabase.from('products').insert({
+        owner_id: profile.id,
+        name, unit,
+        cost_price: cost,
+        selling_price: price,
+        current_stock: stock,
+        low_stock_threshold: threshold,
+        barcode: scannedRegisterBarcode
+      });
+      if (error){
+        // Most likely the per-shop unique constraint catching a genuine
+        // re-scan race (e.g. scanned twice quickly) — surface it plainly
+        // rather than a raw Postgres error.
+        alert('Could not register product: ' + error.message);
+        return;
+      }
+
+      document.getElementById('registerForm').style.display = 'none';
+      scannedRegisterBarcode = null;
+      await loadProducts();
+    } finally {
+      btn.disabled = false;
+    }
+  });
 
   // ===== PRINTING =====
   // One shared print target (#printRoot, outside .screen) instead of three
