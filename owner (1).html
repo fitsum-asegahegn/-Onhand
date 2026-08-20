@@ -1,0 +1,1009 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Onhand — Owner Dashboard</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css">
+  <link rel="stylesheet" href="style-additions.css">
+  <link rel="stylesheet" href="responsive-desktop.css">
+  <link rel="stylesheet" href="layout-fixes.css">
+  <link rel="manifest" href="manifest.json">
+  <link rel="apple-touch-icon" href="apple-touch-icon.png">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <meta name="apple-mobile-web-app-title" content="Onhand">
+  <meta name="theme-color" content="#F7F3EA">
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.6/dist/JsBarcode.all.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
+  <script>
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', () => {
+        navigator.serviceWorker.register('/service-worker.js').catch(err => console.warn('SW registration failed:', err));
+      });
+    }
+  </script>
+</head>
+<body data-page="dashboard">
+<div class="screen">
+
+  <!-- PRINT LOADING OVERLAY -->
+  <div id="printLoadingOverlay" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(255,255,255,0.92); z-index:9999; flex-direction:column; align-items:center; justify-content:center; font-family: 'Inter', sans-serif;">
+    <div style="background:#fff; padding:30px 40px; border-radius:12px; box-shadow:0 8px 30px rgba(0,0,0,0.12); text-align:center; max-width:90%;">
+      <div style="width:40px; height:40px; border:4px solid #e0e0e0; border-top-color:#2563eb; border-radius:50%; animation:spin 0.8s linear infinite; margin:0 auto 16px;"></div>
+      <div style="font-size:18px; font-weight:600; margin-bottom:6px;" data-i18n="generatingLabels">Generating labels...</div>
+      <div style="font-size:14px; color:#666;" id="printProgressText">Preparing labels...</div>
+    </div>
+  </div>
+
+  <!-- HEADER -->
+  <header style="display:flex; justify-content:space-between; align-items:center; padding:16px 20px; border-bottom:1px solid var(--line);">
+    <div class="brand" style="font-size:26px; font-weight:700;"><span id="brandPart1">On</span><span id="brandPart2" style="color:#2563eb;">hand</span></div>
+    <span style="font-size:12px; text-transform:uppercase; color:var(--ink-soft);" data-i18n="ownerBadge">Owner</span>
+  </header>
+
+  <div id="offlineBanner" class="offline-banner">
+    <span class="dot"></span>
+    <span data-i18n="offlineBanner">You are offline</span>
+    <span id="pendingCount"></span>
+  </div>
+
+  <!-- ============ TAB: DASHBOARD ============ -->
+  <div id="tabDashboard" class="tab-page active">
+
+  <h2 class="section-title" data-i18n="needsAttention">Needs Attention</h2>
+  <div id="alertsList"><p class="hint">Checking stock levels...</p></div>
+
+  <h2 class="section-title" data-i18n="salesOverview">Sales Overview</h2>
+  <div style="display:flex; gap:8px; margin-bottom:12px;">
+    <button class="btn-secondary period-btn active" data-period="today" style="flex:1; padding:9px;" data-i18n="today">Today</button>
+    <button class="btn-secondary period-btn" data-period="7" style="flex:1; padding:9px;" data-i18n="days7">7 days</button>
+    <button class="btn-secondary period-btn" data-period="30" style="flex:1; padding:9px;" data-i18n="days30">30 days</button>
+  </div>
+  <div class="stat-row triple">
+    <div class="tag-card" style="margin-bottom:0;">
+      <span class="tag-label" data-i18n="revenue">Revenue</span>
+      <div class="tag-value" id="statRevenue">—</div>
+    </div>
+    <div class="tag-card" style="margin-bottom:0;">
+      <span class="tag-label" data-i18n="profit">Profit</span>
+      <div class="tag-value good" id="statProfit">—</div>
+    </div>
+    <div class="tag-card" style="margin-bottom:0;">
+      <span class="tag-label" data-i18n="itemsSold">Items sold</span>
+      <div class="tag-value" id="statItems">—</div>
+    </div>
+  </div>
+
+  <div style="display:flex; flex-wrap:wrap; gap:16px; margin-bottom:16px;">
+    <div class="tag-card" style="flex:1 1 340px; margin-bottom:0;">
+      <span class="tag-label" data-i18n="revenueTrend">Revenue Trend</span>
+      <div style="position:relative; height:180px; margin-top:10px;">
+        <canvas id="revenueTrendChart"></canvas>
+      </div>
+      <p class="hint" id="revenueTrendEmpty" style="display:none; text-align:center; margin-top:10px;" data-i18n="notEnoughTrendData">Not enough sales yet to show a trend.</p>
+    </div>
+    <div class="tag-card" style="flex:1 1 340px; margin-bottom:0;">
+      <span class="tag-label" data-i18n="topProducts">Top Products</span>
+      <div style="position:relative; height:180px; margin-top:10px;">
+        <canvas id="topProductsChart"></canvas>
+      </div>
+      <p class="hint" id="topProductsEmpty" style="display:none; text-align:center; margin-top:10px;" data-i18n="notEnoughSalesData">No sales recorded in this period yet.</p>
+    </div>
+  </div>
+
+  </div>
+  <!-- ============ /TAB: DASHBOARD ============ -->
+
+  <!-- ============ TAB: PRODUCTS ============ -->
+  <div id="tabProducts" class="tab-page">
+
+  <h2 class="section-title" data-i18n="registerExistingTitle">Register an Existing Product</h2>
+  <p class="hint" data-i18n="registerExistingHint">Already has a barcode from the manufacturer? Scan it instead of printing a new one — it works exactly like your own barcodes from then on.</p>
+  <div class="tag-card">
+    <button class="scan-button" id="startRegisterScanBtn" style="margin-bottom:0;">
+      📷 <span data-i18n="scanToRegister">Scan to Register</span>
+      <span class="sub" data-i18n="tapToOpenCamera">Tap to open the camera</span>
+    </button>
+    <div id="registerReader" style="display:none; margin:12px 0 0;"></div>
+    <div id="registerScanControls" style="display:none; gap:10px; margin-top:12px;">
+      <button class="btn-secondary" id="stopRegisterScanBtn" style="flex:1;" data-i18n="cancelScan">Cancel Scan</button>
+      <button class="btn-secondary" id="registerTorchBtn" style="flex:1; display:none;">💡 <span data-i18n="torch">Torch</span></button>
+    </div>
+
+    <div style="display:flex; gap:8px; align-items:center; margin-top:14px;">
+      <input type="text" id="manualRegisterBarcode" data-i18n-placeholder="orTypeBarcodePlaceholder" placeholder="Or type the barcode" style="flex:1;">
+      <button class="btn-primary" id="manualRegisterBtn" style="flex:0 0 auto; width:auto; padding:12px 18px;" data-i18n="find">Find</button>
+    </div>
+
+    <p id="registerDuplicateMsg" style="display:none; background:rgba(217,166,46,.12); border-left:3px solid var(--accent-dark); padding:10px 14px; border-radius:2px; font-size:13px; margin-top:12px;"></p>
+
+    <div id="registerForm" style="display:none; margin-top:16px; border-top:1px solid var(--line); padding-top:16px;">
+      <p class="hint" style="margin-top:0;"><span data-i18n="barcodeLabel">Barcode</span>: <b id="registerBarcodeDisplay" style="color:var(--ink);"></b></p>
+      <p id="registerNameWarning" style="display:none; background:rgba(193,68,59,.08); border-left:3px solid #c1443b; padding:10px 14px; border-radius:2px; font-size:13px; margin-bottom:14px;"></p>
+      <div class="field">
+        <label data-i18n="productName">Product name</label>
+        <input type="text" id="regName" data-i18n-placeholder="productNamePlaceholder" placeholder="e.g. Sugar">
+      </div>
+      <div class="field">
+        <label data-i18n="soldBy">Sold by</label>
+        <select id="regUnit">
+          <option value="piece" data-i18n="unitPiece">Piece</option>
+          <option value="kg" data-i18n="unitKg">Kilogram (kg)</option>
+          <option value="litre" data-i18n="unitLitre">Litre</option>
+          <option value="pack" data-i18n="unitPack">Pack</option>
+        </select>
+      </div>
+      <div class="stat-row" style="margin-bottom:14px;">
+        <div class="field" style="margin-bottom:0;">
+          <label data-i18n="costPrice">Cost price (Birr)</label>
+          <input type="number" id="regCost" min="0" step="0.5">
+        </div>
+        <div class="field" style="margin-bottom:0;">
+          <label data-i18n="sellingPrice">Selling price (Birr)</label>
+          <input type="number" id="regPrice" min="0" step="0.5">
+        </div>
+      </div>
+      <div class="stat-row" style="margin-bottom:14px;">
+        <div class="field" style="margin-bottom:0;">
+          <label data-i18n="openingStock">Opening stock</label>
+          <input type="number" id="regStock" min="0" step="0.5" value="0">
+        </div>
+        <div class="field" style="margin-bottom:0;">
+          <label data-i18n="lowStockBelow">Low stock alert below</label>
+          <input type="number" id="regThreshold" min="0" step="0.5" value="5">
+        </div>
+      </div>
+      <div style="display:flex; gap:10px;">
+        <button class="btn-secondary" id="cancelRegisterBtn" style="flex:1;" data-i18n="cancel">Cancel</button>
+        <button class="btn-primary" id="saveRegisterBtn" style="flex:1;" data-i18n="saveProductBtn">Save Product</button>
+      </div>
+    </div>
+  </div>
+
+  <h2 class="section-title" data-i18n="addProduct">Add a Product</h2>
+  <p class="hint" data-i18n="addProductHint">A barcode is generated automatically — print or screenshot the label after saving.</p>
+  <div class="tag-card">
+    <div class="field">
+      <label for="pName" data-i18n="productName">Product name</label>
+      <input type="text" id="pName" placeholder="e.g. Sugar" data-i18n-placeholder="productNamePlaceholder">
+    </div>
+    <div class="field">
+      <label for="pUnit" data-i18n="soldBy">Sold by</label>
+      <select id="pUnit">
+        <option value="piece" data-i18n="unitPiece">Piece</option>
+        <option value="kg" data-i18n="unitKg">Kilogram (kg)</option>
+        <option value="litre" data-i18n="unitLitre">Litre</option>
+        <option value="pack" data-i18n="unitPack">Pack</option>
+      </select>
+    </div>
+    <div class="stat-row" style="margin-bottom:14px;">
+      <div class="field" style="margin-bottom:0;">
+        <label for="pCost" data-i18n="costPrice">Cost price (Birr)</label>
+        <input type="number" id="pCost" min="0" step="0.5">
+      </div>
+      <div class="field" style="margin-bottom:0;">
+        <label for="pPrice" data-i18n="sellingPrice">Selling price (Birr)</label>
+        <input type="number" id="pPrice" min="0" step="0.5">
+      </div>
+    </div>
+    <div class="stat-row" style="margin-bottom:14px;">
+      <div class="field" style="margin-bottom:0;">
+        <label for="pStock" data-i18n="openingStock">Opening stock</label>
+        <input type="number" id="pStock" min="0" step="0.5" value="0">
+      </div>
+      <div class="field" style="margin-bottom:0;">
+        <label for="pThreshold" data-i18n="lowStockBelow">Low stock alert below</label>
+        <input type="number" id="pThreshold" min="0" step="0.5" value="5">
+      </div>
+    </div>
+    <button class="btn-primary" id="addProductBtn" data-i18n="saveGenerateBarcode">Save Product & Generate Barcode</button>
+    <p id="duplicateWarning" style="display:none; background:rgba(193,68,59,.08); border-left:3px solid #c1443b; padding:10px 14px; border-radius:2px; font-size:13px; margin-top:12px;"></p>
+    <div id="newBarcodeArea" style="display:none; margin-top:14px;">
+      <div class="barcode-preview" id="newBarcodePrintArea">
+        <div class="print-product-name" id="newBarcodeProductName"></div>
+        <svg id="newBarcodeSvg"></svg>
+      </div>
+      <button class="btn-secondary" style="margin-top:10px;" id="printNewLabelBtn">🖨️ Print Label</button>
+      <p class="hint" style="text-align:center; margin-top:0;" data-i18n="printLabelHint">Print this label and stick it on the product.</p>
+    </div>
+  </div>
+
+  <h2 class="section-title" data-i18n="batchUploadTitle">Batch Upload (CSV)</h2>
+  <p class="hint" data-i18n="batchUploadHint">Add many products at once. Format: <code>name, unit, cost_price, selling_price, current_stock, low_stock_threshold</code>.<br>Example: <code>Sugar, kg, 90, 105, 50, 5</code><br>If your product name contains a comma, wrap it in quotes: <code>"Sugar, white", kg, 90, 105, 50, 5</code></p>
+  <div class="tag-card">
+    <div style="display:flex; gap:8px; flex-wrap:wrap; align-items:center;">
+      <input type="file" id="csvFileInput" accept=".csv" style="flex:1; min-width:180px; padding:8px; border:1px solid var(--line); border-radius:6px; background:var(--card);">
+      <button class="btn-primary" id="uploadCsvBtn" style="width:auto; padding:11px 18px;" data-i18n="uploadSaveBtn">Upload & Save</button>
+    </div>
+    <div id="csvStatus" style="margin-top:10px; font-size:13px;"></div>
+  </div>
+
+  <div style="display:flex; justify-content:space-between; align-items:center; margin-top:26px; margin-bottom:8px;">
+    <h2 class="section-title" style="margin:0;" data-i18n="yourProducts">Your Products</h2>
+    <button class="btn-secondary" id="printAllBtn" style="font-size:12.5px; padding:7px 14px; width:auto;">🖨️ <span data-i18n="printAllBtn">Print All</span></button>
+  </div>
+  <div id="productList"><p class="hint">Loading products...</p></div>
+
+  </div>
+  <!-- ============ /TAB: PRODUCTS ============ -->
+
+  <!-- ============ TAB: SETTINGS ============ -->
+  <div id="tabSettings" class="tab-page">
+
+  <div class="tag-card">
+    <span class="tag-label" data-i18n="yourShopCode">Your shop code</span>
+    <div class="tag-value" id="shopCode" style="font-size:15px; word-break:break-all;">—</div>
+    <p class="tag-sub" data-i18n="shopCodeHint">Give this to a keeper so they can join your shop when they sign up.</p>
+  </div>
+
+  <div class="tag-card">
+    <span class="tag-label" data-i18n="languageLabel">Language</span>
+    <div style="margin-top:10px;">
+      <button class="lang-toggle" id="langToggle" onclick="toggleLang()">አማርኛ</button>
+    </div>
+  </div>
+
+  <button class="btn-secondary" onclick="signOut()" style="width:100%;" data-i18n="signOut">Sign out</button>
+
+  </div>
+  <!-- ============ /TAB: SETTINGS ============ -->
+
+  <nav class="bottom-nav">
+    <button id="navBtnDashboard" class="active" onclick="showTab('Dashboard')">
+      <span class="icon">📊</span><span data-i18n="navDashboard">Dashboard</span>
+    </button>
+    <button id="navBtnProducts" onclick="showTab('Products')">
+      <span class="icon">📦</span><span data-i18n="navProducts">Products</span>
+    </button>
+    <button id="navBtnSettings" onclick="showTab('Settings')">
+      <span class="icon">⚙️</span><span data-i18n="navSettings">Settings</span>
+    </button>
+  </nav>
+
+</div>
+
+<!-- Single dedicated print target — lives OUTSIDE .screen on purpose.
+     During print, .screen (and everything in it) gets display:none,
+     which only works if this element is NOT a descendant of it — a
+     hidden ancestor hides its whole subtree regardless of the child's
+     own display value. See layout-fixes.css. -->
+<div id="printRoot"></div>
+
+<script src="supabaseClient.js"></script>
+<script src="i18n.js"></script>
+<script src="offline.js"></script>
+<script>
+  let profile = null;
+  let allProducts = [];
+
+  function showTab(name){
+    document.querySelectorAll('.tab-page').forEach(el => el.classList.remove('active'));
+    document.getElementById('tab' + name).classList.add('active');
+    document.querySelectorAll('.bottom-nav button').forEach(b => b.classList.remove('active'));
+    document.getElementById('navBtn' + name).classList.add('active');
+    window.scrollTo(0, 0);
+  }
+
+  function fmtBirr(n){ return Math.round(n).toLocaleString('en-US') + ' Birr'; }
+
+  function periodStartDate(period){
+    const now = new Date();
+    if (period === 'today'){ now.setHours(0,0,0,0); return now; }
+    const days = period === '7' ? 7 : 30;
+    now.setDate(now.getDate() - days);
+    return now;
+  }
+
+  let revenueTrendChart = null;
+  let topProductsChart = null;
+
+  const CHART_GOLD = '#D9A62E';
+  const CHART_BLUE = '#2563eb';
+  const CHART_INK = '#1F2A24';
+  const CHART_LINE = '#E2DACB';
+
+  function dayKey(d){ return new Date(d).toISOString().slice(0,10); }
+  function dayLabel(k){ const d = new Date(k); return d.toLocaleDateString('en-US', { month:'short', day:'numeric' }); }
+
+  function renderRevenueTrend(sales, period){
+    const canvas = document.getElementById('revenueTrendChart');
+    const emptyMsg = document.getElementById('revenueTrendEmpty');
+
+    if (period === 'today' || !sales.length){
+      canvas.style.display = 'none';
+      emptyMsg.style.display = 'block';
+      if (revenueTrendChart) { revenueTrendChart.destroy(); revenueTrendChart = null; }
+      return;
+    }
+    canvas.style.display = 'block';
+    emptyMsg.style.display = 'none';
+
+    const byDay = {};
+    sales.forEach(s => {
+      const k = dayKey(s.sold_at);
+      byDay[k] = (byDay[k] || 0) + s.quantity * s.unit_price_at_sale;
+    });
+    const days = Object.keys(byDay).sort();
+
+    if (revenueTrendChart) revenueTrendChart.destroy();
+    revenueTrendChart = new Chart(canvas, {
+      type: 'bar',
+      data: {
+        labels: days.map(dayLabel),
+        datasets: [{ data: days.map(k => Math.round(byDay[k])), backgroundColor: CHART_GOLD, borderRadius: 3, maxBarThickness: 28 }]
+      },
+      options: {
+        responsive: true, maintainAspectRatio: false,
+        plugins: { legend: { display: false }, tooltip: { callbacks: { label: (ctx) => ctx.parsed.y.toLocaleString('en-US') + ' Birr' } } },
+        scales: {
+          x: { grid: { display: false }, ticks: { color: CHART_INK, font: { size: 10 } } },
+          y: { grid: { color: CHART_LINE }, ticks: { color: CHART_INK, font: { size: 10 } } }
+        }
+      }
+    });
+  }
+
+  function renderTopProducts(sales){
+    const canvas = document.getElementById('topProductsChart');
+    const emptyMsg = document.getElementById('topProductsEmpty');
+
+    if (!sales.length){
+      canvas.style.display = 'none';
+      emptyMsg.style.display = 'block';
+      if (topProductsChart) { topProductsChart.destroy(); topProductsChart = null; }
+      return;
+    }
+
+    const byProduct = {};
+    sales.forEach(s => {
+      byProduct[s.product_id] = (byProduct[s.product_id] || 0) + Number(s.quantity);
+    });
+    const productMap = Object.fromEntries(allProducts.map(p => [p.id, p.name]));
+    const top = Object.entries(byProduct)
+      .map(([id, qty]) => ({ name: productMap[id] || '—', qty }))
+      .sort((a,b) => b.qty - a.qty)
+      .slice(0, 6);
+
+    if (!top.length){
+      canvas.style.display = 'none';
+      emptyMsg.style.display = 'block';
+      if (topProductsChart) { topProductsChart.destroy(); topProductsChart = null; }
+      return;
+    }
+    canvas.style.display = 'block';
+    emptyMsg.style.display = 'none';
+
+    if (topProductsChart) topProductsChart.destroy();
+    topProductsChart = new Chart(canvas, {
+      type: 'bar',
+      data: {
+        labels: top.map(t => t.name),
+        datasets: [{ data: top.map(t => t.qty), backgroundColor: CHART_BLUE, borderRadius: 3, maxBarThickness: 22 }]
+      },
+      options: {
+        indexAxis: 'y', responsive: true, maintainAspectRatio: false,
+        plugins: { legend: { display: false } },
+        scales: {
+          x: { grid: { color: CHART_LINE }, ticks: { color: CHART_INK, font: { size: 10 }, precision: 0 } },
+          y: { grid: { display: false }, ticks: { color: CHART_INK, font: { size: 11 } } }
+        }
+      }
+    });
+  }
+
+  async function loadStats(period){
+    const since = periodStartDate(period).toISOString();
+    const { data, error } = await supabase
+      .from('sales')
+      .select('quantity, unit_price_at_sale, cost_price_at_sale, product_id, sold_at')
+      .eq('owner_id', profile.id)
+      .gte('sold_at', since);
+    if (error) { console.error(error); return; }
+
+    let revenue = 0, profitTotal = 0, items = 0;
+    data.forEach(s => {
+      revenue += s.quantity * s.unit_price_at_sale;
+      profitTotal += s.quantity * (s.unit_price_at_sale - s.cost_price_at_sale);
+      items += Number(s.quantity);
+    });
+    document.getElementById('statRevenue').textContent = fmtBirr(revenue);
+    document.getElementById('statProfit').textContent = fmtBirr(profitTotal);
+    document.getElementById('statItems').textContent = items.toLocaleString('en-US');
+
+    renderRevenueTrend(data, period);
+    renderTopProducts(data);
+  }
+
+  document.querySelectorAll('.period-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('.period-btn').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      loadStats(btn.dataset.period);
+    });
+  });
+
+  async function loadProducts(){
+    const container = document.getElementById('productList');
+    try {
+      const { data, error } = await supabase
+        .from('products')
+        .select('*')
+        .eq('owner_id', profile.id)
+        .order('name');
+      if (error) throw error;
+      allProducts = data || [];
+      cacheProducts(profile.id, allProducts);
+      renderProducts();
+      renderAlerts();
+    } catch (err) {
+      container.innerHTML = `<p style="color:red;">Error loading products: ${err.message}</p>`;
+      console.error('loadProducts error:', err);
+    }
+  }
+
+  function renderProducts(){
+    const el = document.getElementById('productList');
+    if (!allProducts.length){
+      el.innerHTML = `<p class="empty-state">${t('noProductsYet')}</p>`;
+      return;
+    }
+    el.innerHTML = allProducts.map(p => {
+      const low = Number(p.current_stock) <= Number(p.low_stock_threshold);
+      return `
+        <div class="product-row" style="flex-direction:column; align-items:stretch; cursor:pointer;" onclick="toggleProductDetails('${p.id}')">
+          <div style="display:flex; justify-content:space-between; align-items:center;">
+            <div>
+              <div class="name">${escapeHtml(p.name)}</div>
+              <div class="meta">${p.current_stock} ${p.unit} ${t('inStock')}</div>
+            </div>
+            <div style="display:flex; align-items:center; gap:10px;">
+              <span class="stock-flag ${low ? 'low' : 'ok'}">${low ? t('stockLow') : t('stockOk')}</span>
+              <button onclick="event.stopPropagation(); printSingleProduct('${p.id}')" style="background:none; border:none; font-size:15px; cursor:pointer; padding:2px;" title="${t('printLabelBtn')}">🖨️</button>
+              <span style="font-size:11px; color:var(--ink-soft); text-decoration:underline;" id="toggleLabel-${p.id}">${t('detailsBtn')}</span>
+            </div>
+          </div>
+          <div id="details-${p.id}" style="display:none; margin-top:12px; padding-top:12px; border-top:1px solid var(--line);" onclick="event.stopPropagation()"></div>
+        </div>`;
+    }).join('');
+  }
+
+  async function toggleProductDetails(productId){
+    const panel = document.getElementById('details-' + productId);
+    const label = document.getElementById('toggleLabel-' + productId);
+    const isOpen = panel.style.display === 'block';
+
+    if (isOpen){
+      panel.style.display = 'none';
+      label.textContent = t('detailsBtn');
+      return;
+    }
+
+    panel.style.display = 'block';
+    label.textContent = t('hideDetailsBtn');
+
+    if (panel.dataset.loaded === '1') return;
+
+    const product = allProducts.find(p => p.id === productId);
+    panel.innerHTML = '<p class="hint">Loading details...</p>';
+
+    try {
+      const { data, error } = await supabase
+        .from('sales')
+        .select('quantity, sold_at')
+        .eq('product_id', productId);
+      if (error) throw error;
+
+      const rows = data || [];
+      const totalSold = rows.reduce((sum, s) => sum + Number(s.quantity), 0);
+      const lastSoldAt = rows.length
+        ? rows.reduce((latest, s) => (s.sold_at > latest ? s.sold_at : latest), rows[0].sold_at)
+        : null;
+      const lastSoldText = lastSoldAt
+        ? new Date(lastSoldAt).toLocaleString('en-US', { dateStyle: 'medium', timeStyle: 'short' })
+        : t('neverSold');
+
+      panel.innerHTML = `
+        <span class="tag-label">${t('barcodeLabel')}</span>
+        <div class="barcode-preview" style="margin:6px 0 12px;">
+          <div class="print-product-name">${escapeHtml(product.name)}</div>
+          <svg id="detailBarcode-${productId}"></svg>
+        </div>
+        <button class="btn-secondary" onclick="printSingleProduct('${productId}')" style="width:auto; padding:8px 16px; font-size:12.5px; margin-bottom:12px;">🖨️ ${t('printLabelBtn')}</button>
+        <div class="stat-row triple" style="gap:8px;">
+          <div>
+            <div class="tag-label" style="font-size:9.5px;">${t('totalSoldAllTime')}</div>
+            <div class="tag-value" style="font-size:17px;">${totalSold} ${product.unit}</div>
+          </div>
+          <div>
+            <div class="tag-label" style="font-size:9.5px;">${t('currentlyLeft')}</div>
+            <div class="tag-value good" style="font-size:17px;">${product.current_stock} ${product.unit}</div>
+          </div>
+        </div>
+        <p class="hint" style="margin-top:10px; margin-bottom:14px;">${t('lastSold')}: ${lastSoldText}</p>
+        <div style="border-top:1px solid var(--line); padding-top:12px;">
+          <span class="tag-label">${t('addStock')}</span>
+          <p class="hint" style="margin:4px 0 10px;">${t('addStockHint')}</p>
+          <div style="display:flex; gap:8px; align-items:flex-end;">
+            <div class="field" style="margin-bottom:0; flex:1;">
+              <label>${t('quantityReceived')}</label>
+              <input type="number" id="restockQty-${productId}" min="0.1" step="0.5" placeholder="0">
+            </div>
+            <button class="btn-primary" style="width:auto; padding:11px 16px;" onclick="addStock('${productId}')">${t('addStockBtn')}</button>
+          </div>
+          <p id="restockMsg-${productId}" style="font-size:12px; color:var(--good); display:none; margin-top:8px;"></p>
+        </div>
+      `;
+      JsBarcode('#detailBarcode-' + productId, product.barcode, { format: 'CODE128', height: 50, displayValue: true, fontSize: 11 });
+      panel.dataset.loaded = '1';
+    } catch (e) {
+      panel.innerHTML = `<p style="color:red; font-size:12.5px;">${e.message}</p>`;
+    }
+  }
+
+  async function addStock(productId){
+    const input = document.getElementById('restockQty-' + productId);
+    const msg = document.getElementById('restockMsg-' + productId);
+    const qty = parseFloat(input.value);
+    if (!qty || qty <= 0) { input.focus(); return; }
+
+    const { error } = await supabase.from('stock_movements').insert({
+      owner_id: profile.id,
+      product_id: productId,
+      change_amount: qty,
+      reason: 'delivery',
+      recorded_by: profile.id
+    });
+    if (error) { alert('Could not add stock: ' + error.message); return; }
+
+    input.value = '';
+    msg.textContent = '✓ ' + t('stockAdded');
+    msg.style.display = 'block';
+    setTimeout(() => { msg.style.display = 'none'; }, 2500);
+
+    const panel = document.getElementById('details-' + productId);
+    panel.dataset.loaded = '0';
+    await loadProducts();
+    await toggleProductDetails(productId);
+  }
+
+  function renderAlerts(){
+    const el = document.getElementById('alertsList');
+    const lowStock = allProducts.filter(p => Number(p.current_stock) <= Number(p.low_stock_threshold));
+    if (!lowStock.length){
+      el.innerHTML = `<p class="empty-state">${t('nothingNeedsAttention')}</p>`;
+      return;
+    }
+    el.innerHTML = lowStock.map(p => `
+      <div class="alert-card urgent">
+        <div class="alert-title">⚠️ ${t('reorderSoon')} ${escapeHtml(p.name)}</div>
+        <div>${p.current_stock} ${p.unit} ${t('stockLeft')}</div>
+      </div>`).join('');
+  }
+
+  function escapeHtml(s){
+    const d = document.createElement('div');
+    d.textContent = s;
+    return d.innerHTML;
+  }
+
+  function generateBarcodeValue(){
+    if (window.crypto && crypto.randomUUID) {
+      return 'ONHAND' + crypto.randomUUID().replace(/-/g, '').slice(0, 12).toUpperCase();
+    }
+    return 'ONHAND' + Date.now().toString(36).toUpperCase() + Math.random().toString(36).slice(2, 8).toUpperCase();
+  }
+
+  document.getElementById('addProductBtn').addEventListener('click', async () => {
+    const btn = document.getElementById('addProductBtn');
+    const warningEl = document.getElementById('duplicateWarning');
+    warningEl.style.display = 'none';
+
+    const name = document.getElementById('pName').value.trim();
+    const unit = document.getElementById('pUnit').value;
+    const cost = parseFloat(document.getElementById('pCost').value) || 0;
+    const price = parseFloat(document.getElementById('pPrice').value) || 0;
+    const stock = parseFloat(document.getElementById('pStock').value) || 0;
+    const threshold = parseFloat(document.getElementById('pThreshold').value) || 0;
+
+    if (!name){ alert('Enter a product name.'); return; }
+
+    const existing = allProducts.find(p => p.name.trim().toLowerCase() === name.toLowerCase());
+    if (existing) {
+      warningEl.innerHTML = `<b>${escapeHtml(name)}</b> ${t('productAlreadyExists')} <span style="text-decoration:underline; cursor:pointer;" onclick="scrollToProductDetails('${existing.id}')">${t('scrollToExisting')}</span>`;
+      warningEl.style.display = 'block';
+      return;
+    }
+
+    if (btn.disabled) return;
+    btn.disabled = true;
+
+    try {
+      const barcode = generateBarcodeValue();
+      const { error } = await supabase.from('products').insert({
+        owner_id: profile.id,
+        name, unit,
+        cost_price: cost,
+        selling_price: price,
+        current_stock: stock,
+        low_stock_threshold: threshold,
+        barcode
+      });
+      if (error){ alert('Could not save product: ' + error.message); return; }
+
+      document.getElementById('newBarcodeArea').style.display = 'block';
+      document.getElementById('newBarcodeProductName').textContent = name;
+      JsBarcode('#newBarcodeSvg', barcode, { format: 'CODE128', height: 60, displayValue: true, fontSize: 12 });
+      document.getElementById('printNewLabelBtn').onclick = () => printBarcodeLabel(name, barcode);
+
+      document.getElementById('pName').value = '';
+      document.getElementById('pCost').value = '';
+      document.getElementById('pPrice').value = '';
+      document.getElementById('pStock').value = '0';
+
+      await loadProducts();
+    } finally {
+      btn.disabled = false;
+    }
+  });
+
+  function scrollToProductDetails(productId){
+    const row = document.getElementById('details-' + productId)?.closest('.product-row');
+    if (!row) return;
+    row.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    row.style.transition = 'background .3s';
+    row.style.background = 'rgba(217,166,46,.15)';
+    setTimeout(() => { row.style.background = ''; }, 1500);
+    const panel = document.getElementById('details-' + productId);
+    if (panel.style.display !== 'block') toggleProductDetails(productId);
+  }
+
+  // ===== REGISTER EXISTING PRODUCT (scan a real manufacturer barcode) =====
+  // Unlike the "Add a Product" form (which always generates a fresh
+  // ONHAND-xxxx barcode), this flow uses the barcode that's ALREADY on
+  // the product's packaging. Requires the per-shop unique constraint
+  // (fix-barcode-scope.sql) — a global unique barcode constraint would
+  // wrongly reject the same real-world product being registered in two
+  // different shops.
+
+  let registerScanner = null;
+  let registerTorchOn = false;
+  let scannedRegisterBarcode = null;
+
+  async function startRegisterScanner(){
+    try {
+      document.getElementById('registerReader').style.display = 'block';
+      document.getElementById('registerScanControls').style.display = 'flex';
+      document.getElementById('startRegisterScanBtn').style.display = 'none';
+
+      registerScanner = new Html5Qrcode("registerReader", {
+        // Real manufacturer barcodes are almost always EAN-13/UPC-A, not
+        // the CODE_128 format Onhand's own generated barcodes use — this
+        // list covers both, so re-scanning an existing Onhand label here
+        // (to trigger the "already registered" path) also works.
+        formatsToSupport: [
+          Html5QrcodeSupportedFormats.EAN_13,
+          Html5QrcodeSupportedFormats.EAN_8,
+          Html5QrcodeSupportedFormats.UPC_A,
+          Html5QrcodeSupportedFormats.UPC_E,
+          Html5QrcodeSupportedFormats.CODE_128
+        ],
+        useBarCodeDetectorIfSupported: true,
+        verbose: false
+      });
+
+      await registerScanner.start(
+        { facingMode: "environment" },
+        {
+          fps: 15,
+          qrbox: function(viewfinderWidth) {
+            var w = Math.floor(Math.min(viewfinderWidth * 0.85, 380));
+            return { width: w, height: Math.floor(w * 0.5) };
+          }
+        },
+        (decodedText) => { stopRegisterScanner(); handleScannedBarcode(decodedText); }
+      );
+
+      try {
+        const capabilities = registerScanner.getRunningTrackCapabilities();
+        if (capabilities && capabilities.torch) {
+          document.getElementById('registerTorchBtn').style.display = 'block';
+        }
+      } catch (e) { /* not supported — fine */ }
+    } catch (e) {
+      alert('Could not open camera. Check permissions.');
+      await stopRegisterScanner();
+    }
+  }
+
+  document.getElementById('registerTorchBtn').addEventListener('click', async () => {
+    if (!registerScanner) return;
+    try {
+      registerTorchOn = !registerTorchOn;
+      await registerScanner.applyVideoConstraints({ advanced: [{ torch: registerTorchOn }] });
+    } catch (e) { /* torch not available — silently ignore, matches keeper.html pattern */ }
+  });
+
+  async function stopRegisterScanner(){
+    if (registerScanner){
+      try { await registerScanner.stop(); await registerScanner.clear(); } catch (e) {}
+      registerScanner = null;
+    }
+    registerTorchOn = false;
+    document.getElementById('registerReader').style.display = 'none';
+    document.getElementById('registerScanControls').style.display = 'none';
+    document.getElementById('registerTorchBtn').style.display = 'none';
+    document.getElementById('startRegisterScanBtn').style.display = 'block';
+  }
+
+  document.getElementById('startRegisterScanBtn').addEventListener('click', startRegisterScanner);
+  document.getElementById('stopRegisterScanBtn').addEventListener('click', stopRegisterScanner);
+
+  document.getElementById('manualRegisterBtn').addEventListener('click', () => {
+    const code = document.getElementById('manualRegisterBarcode').value.trim();
+    if (!code) return;
+    document.getElementById('manualRegisterBarcode').value = '';
+    handleScannedBarcode(code);
+  });
+  document.getElementById('manualRegisterBarcode').addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') { e.preventDefault(); document.getElementById('manualRegisterBtn').click(); }
+  });
+
+  function handleScannedBarcode(code){
+    const dupMsg = document.getElementById('registerDuplicateMsg');
+    dupMsg.style.display = 'none';
+
+    const existing = allProducts.find(p => p.barcode === code);
+    if (existing){
+      dupMsg.innerHTML = `<b>${escapeHtml(existing.name)}</b> ${t('barcodeAlreadyRegistered')} <span style="text-decoration:underline; cursor:pointer;" onclick="showTab('Products'); scrollToProductDetails('${existing.id}')">${t('scrollToExisting')}</span>`;
+      dupMsg.style.display = 'block';
+      document.getElementById('registerForm').style.display = 'none';
+      return;
+    }
+    openRegisterForm(code);
+  }
+
+  function openRegisterForm(barcode){
+    scannedRegisterBarcode = barcode;
+    document.getElementById('registerBarcodeDisplay').textContent = barcode;
+    document.getElementById('registerNameWarning').style.display = 'none';
+    document.getElementById('regName').value = '';
+    document.getElementById('regCost').value = '';
+    document.getElementById('regPrice').value = '';
+    document.getElementById('regStock').value = '0';
+    document.getElementById('regThreshold').value = '5';
+    document.getElementById('registerForm').style.display = 'block';
+    document.getElementById('regName').focus();
+  }
+
+  document.getElementById('cancelRegisterBtn').addEventListener('click', () => {
+    document.getElementById('registerForm').style.display = 'none';
+    scannedRegisterBarcode = null;
+  });
+
+  document.getElementById('saveRegisterBtn').addEventListener('click', async () => {
+    const btn = document.getElementById('saveRegisterBtn');
+    const warningEl = document.getElementById('registerNameWarning');
+    warningEl.style.display = 'none';
+
+    const name = document.getElementById('regName').value.trim();
+    const unit = document.getElementById('regUnit').value;
+    const cost = parseFloat(document.getElementById('regCost').value) || 0;
+    const price = parseFloat(document.getElementById('regPrice').value) || 0;
+    const stock = parseFloat(document.getElementById('regStock').value) || 0;
+    const threshold = parseFloat(document.getElementById('regThreshold').value) || 0;
+
+    if (!name){ alert('Enter a product name.'); return; }
+    if (!scannedRegisterBarcode){ alert('Scan or type a barcode first.'); return; }
+
+    const existingName = allProducts.find(p => p.name.trim().toLowerCase() === name.toLowerCase());
+    if (existingName){
+      warningEl.innerHTML = `<b>${escapeHtml(name)}</b> ${t('productAlreadyExists')} <span style="text-decoration:underline; cursor:pointer;" onclick="document.getElementById('registerForm').style.display='none'; scrollToProductDetails('${existingName.id}')">${t('scrollToExisting')}</span>`;
+      warningEl.style.display = 'block';
+      return;
+    }
+
+    if (btn.disabled) return;
+    btn.disabled = true;
+
+    try {
+      const { error } = await supabase.from('products').insert({
+        owner_id: profile.id,
+        name, unit,
+        cost_price: cost,
+        selling_price: price,
+        current_stock: stock,
+        low_stock_threshold: threshold,
+        barcode: scannedRegisterBarcode
+      });
+      if (error){
+        // Most likely the per-shop unique constraint catching a genuine
+        // re-scan race (e.g. scanned twice quickly) — surface it plainly
+        // rather than a raw Postgres error.
+        alert('Could not register product: ' + error.message);
+        return;
+      }
+
+      document.getElementById('registerForm').style.display = 'none';
+      scannedRegisterBarcode = null;
+      await loadProducts();
+    } finally {
+      btn.disabled = false;
+    }
+  });
+
+  // ===== PRINTING =====
+  // One shared print target (#printRoot, outside .screen) instead of three
+  // separate ones. Since .screen disappears entirely during print, there's
+  // no way for an open Details panel or a leftover previous print to
+  // overlap with the current one anymore — whatever's in #printRoot right
+  // now is the only thing that can possibly show up.
+
+  function afterPaint(callback){
+    requestAnimationFrame(() => requestAnimationFrame(callback));
+  }
+
+  function printBarcodeLabel(name, barcode){
+    const root = document.getElementById('printRoot');
+    root.innerHTML = '';
+
+    const nameEl = document.createElement('div');
+    nameEl.className = 'print-product-name';
+    nameEl.textContent = name;
+
+    const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+
+    root.appendChild(nameEl);
+    root.appendChild(svg);
+
+    JsBarcode(svg, barcode, { format: 'CODE128', width: 2, height: 80, displayValue: true, fontSize: 16, margin: 5 });
+
+    afterPaint(() => window.print());
+  }
+
+  function printSingleProduct(productId){
+    const p = allProducts.find(x => x.id === productId);
+    if (!p) return;
+    printBarcodeLabel(p.name, p.barcode);
+  }
+
+  function printAllLabels(){
+    if (!allProducts.length) { alert('No products to print.'); return; }
+
+    const overlay = document.getElementById('printLoadingOverlay');
+    const progressText = document.getElementById('printProgressText');
+    overlay.style.display = 'flex';
+    progressText.textContent = `Generating ${allProducts.length} label(s)…`;
+
+    afterPaint(() => {
+      const root = document.getElementById('printRoot');
+      root.innerHTML = '<div class="print-label-grid" id="printLabelGrid"></div>';
+      const grid = document.getElementById('printLabelGrid');
+
+      allProducts.forEach(p => {
+        const div = document.createElement('div');
+        div.className = 'print-label';
+        div.innerHTML = `<svg id="printSvg-${p.id}"></svg><div class="print-product-name">${escapeHtml(p.name)}</div><div class="print-product-price">${Math.round(p.selling_price)} Birr</div>`;
+        grid.appendChild(div);
+      });
+      allProducts.forEach(p => {
+        JsBarcode('#printSvg-' + p.id, p.barcode, { format: 'CODE128', width: 1.5, height: 50, displayValue: true, fontSize: 12, margin: 3 });
+      });
+
+      afterPaint(() => {
+        overlay.style.display = 'none';
+        window.print();
+      });
+    });
+  }
+
+  document.getElementById('printAllBtn').addEventListener('click', printAllLabels);
+
+  // ===== CSV BATCH UPLOAD =====
+  function parseCSVLine(line){
+    const matches = line.match(/(".*?"|[^,]+)(?=\s*,|\s*$)/g);
+    if (!matches) return [];
+    return matches.map(m => m.replace(/^"|"$/g, '').trim());
+  }
+
+  document.getElementById('uploadCsvBtn').addEventListener('click', async () => {
+    const fileInput = document.getElementById('csvFileInput');
+    const status = document.getElementById('csvStatus');
+    status.style.color = 'var(--ink-soft)';
+    status.textContent = 'Reading file...';
+
+    if (!fileInput.files.length) {
+      status.textContent = 'Please select a CSV file.';
+      status.style.color = '#c1443b';
+      return;
+    }
+
+    const text = await fileInput.files[0].text();
+    const lines = text.split('\n').filter(l => l.trim() !== '');
+    if (lines.length < 2) {
+      status.textContent = 'CSV must have a header row and at least one product row.';
+      status.style.color = '#c1443b';
+      return;
+    }
+
+    const headers = parseCSVLine(lines[0]).map(h => h.toLowerCase());
+    const expected = ['name', 'unit', 'cost_price', 'selling_price', 'current_stock', 'low_stock_threshold'];
+    if (!expected.every(e => headers.includes(e))) {
+      status.textContent = `Invalid headers. Expected: ${expected.join(', ')}`;
+      status.style.color = '#c1443b';
+      return;
+    }
+
+    const existingNames = new Set(allProducts.map(p => p.name.trim().toLowerCase()));
+    const seenInFile = new Set();
+    const products = [];
+    const skipped = [];
+
+    for (let i = 1; i < lines.length; i++) {
+      const cols = parseCSVLine(lines[i]);
+      if (cols.length < headers.length) { skipped.push(`Row ${i + 1}: not enough columns`); continue; }
+
+      const row = {};
+      headers.forEach((h, idx) => { row[h] = cols[idx] || ''; });
+      const nameKey = row.name.trim().toLowerCase();
+
+      if (!row.name) { skipped.push(`Row ${i + 1}: missing name`); continue; }
+      if (existingNames.has(nameKey)) { skipped.push(`Row ${i + 1}: "${row.name}" already exists — use Add Stock on it instead`); continue; }
+      if (seenInFile.has(nameKey)) { skipped.push(`Row ${i + 1}: "${row.name}" appears twice in this file`); continue; }
+      seenInFile.add(nameKey);
+
+      products.push({
+        owner_id: profile.id,
+        name: row.name,
+        unit: row.unit || 'piece',
+        cost_price: parseFloat(row.cost_price) || 0,
+        selling_price: parseFloat(row.selling_price) || 0,
+        current_stock: parseFloat(row.current_stock) || 0,
+        low_stock_threshold: parseFloat(row.low_stock_threshold) || 5,
+        barcode: generateBarcodeValue()
+      });
+    }
+
+    if (!products.length) {
+      status.innerHTML = 'No new products to add.' + (skipped.length ? '<br>' + skipped.join('<br>') : '');
+      status.style.color = '#c1443b';
+      return;
+    }
+
+    status.textContent = `Uploading ${products.length} product(s)...`;
+
+    const batchSize = 50;
+    let successCount = 0;
+    const errorBatches = [];
+    for (let i = 0; i < products.length; i += batchSize) {
+      const batch = products.slice(i, i + batchSize);
+      const { error } = await supabase.from('products').insert(batch);
+      if (error) { errorBatches.push(`Rows ${i + 1}–${i + batch.length}: ${error.message}`); continue; }
+      successCount += batch.length;
+    }
+
+    const messages = [`✅ Added ${successCount} product(s).`];
+    if (skipped.length) messages.push(`Skipped: ${skipped.join('; ')}`);
+    if (errorBatches.length) messages.push(`Errors: ${errorBatches.join('; ')}`);
+    status.innerHTML = messages.join('<br>');
+    status.style.color = errorBatches.length ? '#c1443b' : (skipped.length ? '#A87A1C' : 'var(--good)');
+
+    fileInput.value = '';
+    await loadProducts();
+  });
+
+  // ===== ON LOAD =====
+  (async () => {
+    profile = await requireRole('owner');
+    if (!profile) return;
+    document.getElementById('shopCode').textContent = profile.id;
+    await loadProducts();
+    await loadStats('today');
+  })();
+</script>
+</body>
+  </html>
