@@ -58,6 +58,10 @@
   <h2 class="section-title" data-i18n="needsAttention">Needs Attention</h2>
   <div id="alertsList"><p class="hint">Checking stock levels...</p></div>
 
+  <h2 class="section-title" data-i18n="missedSalesTitle">What Customers Wanted</h2>
+  <p class="hint" data-i18n="missedSalesHint">From "Item not found?" reports on the keeper's screen — patterns worth stocking.</p>
+  <div id="missedSalesList"><p class="hint">…</p></div>
+
   <h2 class="section-title" data-i18n="salesOverview">Sales Overview</h2>
   <div style="display:flex; gap:8px; margin-bottom:12px;">
     <button class="btn-secondary period-btn active" data-period="today" style="flex:1; padding:9px;" data-i18n="today">Today</button>
@@ -589,6 +593,69 @@
       </div>`).join('');
   }
 
+  // Aggregated, not a raw log — three separate "cooking oil" reports are
+  // one pattern worth noticing, not three lines to scroll past. Grouped
+  // case-insensitively since a keeper might type "Cooking Oil" one time
+  // and "cooking oil" the next for the same real request.
+  async function loadMissedSales(){
+    const el = document.getElementById('missedSalesList');
+    const since = new Date(Date.now() - 30 * 86400000).toISOString();
+
+    try {
+      const { data, error } = await supabase
+        .from('missed_sales')
+        .select('product_name_free_text, created_at')
+        .eq('owner_id', profile.id)
+        .gte('created_at', since)
+        .order('created_at', { ascending: false });
+      if (error) throw error;
+
+      if (!data.length){
+        el.innerHTML = `<p class="empty-state">${t('noMissedSales')}</p>`;
+        return;
+      }
+
+      const grouped = {};
+      data.forEach(row => {
+        const raw = (row.product_name_free_text || '').trim();
+        if (!raw) return;
+        const key = raw.toLowerCase();
+        if (!grouped[key]) grouped[key] = { name: raw, count: 0, lastAsked: row.created_at };
+        grouped[key].count += 1;
+        if (row.created_at > grouped[key].lastAsked) grouped[key].lastAsked = row.created_at;
+      });
+
+      const items = Object.values(grouped).sort((a, b) => b.count - a.count || (b.lastAsked > a.lastAsked ? 1 : -1));
+
+      el.innerHTML = items.map(item => {
+        const dateText = new Date(item.lastAsked).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+        const timesText = item.count === 1 ? t('askedOnce') : `${t('askedFor')} ${item.count} ${t('times')}`;
+        return `
+          <div class="alert-card">
+            <div style="display:flex; justify-content:space-between; align-items:flex-start; gap:10px;">
+              <div>
+                <div class="alert-title" style="color:var(--ink);">🔍 ${escapeHtml(item.name)}</div>
+                <div>${timesText} · ${t('lastAskedLabel')} ${dateText}</div>
+              </div>
+              <button class="btn-secondary" style="width:auto; padding:6px 12px; font-size:11.5px; flex-shrink:0;" onclick="addMissedToCatalog('${escapeHtml(item.name).replace(/'/g, "\\'")}')">${t('addToCatalog')}</button>
+            </div>
+          </div>`;
+      }).join('');
+    } catch (e) {
+      el.innerHTML = `<p style="color:red; font-size:12.5px;">${e.message}</p>`;
+    }
+  }
+
+  function addMissedToCatalog(name){
+    showTab('Products');
+    setTimeout(() => {
+      const nameField = document.getElementById('pName');
+      nameField.value = name;
+      nameField.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      nameField.focus();
+    }, 50);
+  }
+
   function escapeHtml(s){
     const d = document.createElement('div');
     d.textContent = s;
@@ -1020,6 +1087,7 @@
       currentLang === 'am' ? 'ለስካን ዝግጁ' : 'Ready for scanner input';
     await loadProducts();
     await loadStats('today');
+    await loadMissedSales();
   })();
 </script>
 </body>
