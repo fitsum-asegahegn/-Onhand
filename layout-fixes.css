@@ -54,6 +54,17 @@ input, select, textarea { min-width: 0; }
   font-size: clamp(17px, 5.5vw, 26px);
 }
 
+/* Collapsible Needs Attention / Missed Sales panels — same <details>
+   pattern already used for keeper.html's stock list, so the interaction
+   is familiar across the app rather than a one-off. */
+#alertsPanel summary::-webkit-details-marker,
+#missedSalesPanel summary::-webkit-details-marker{ display:none; }
+.disclosure-arrow{
+  display:inline-block; color:var(--ink-soft); margin-right:2px;
+  transition:transform .15s ease;
+}
+details[open] .disclosure-arrow{ transform:rotate(90deg); }
+
 /* ---------- Bottom tab navigation ---------- */
 .tab-page{ display:none; }
 .tab-page.active{ display:block; }

@@ -55,12 +55,22 @@
   <!-- ============ TAB: DASHBOARD ============ -->
   <div id="tabDashboard" class="tab-page active">
 
-  <h2 class="section-title" data-i18n="needsAttention">Needs Attention</h2>
-  <div id="alertsList"><p class="hint">Checking stock levels...</p></div>
+  <details class="tag-card" id="alertsPanel" open>
+    <summary style="cursor:pointer; font-weight:700; font-size:13px; font-family:var(--display); text-transform:uppercase; letter-spacing:.04em; list-style:none; display:flex; justify-content:space-between; align-items:center;">
+      <span><span class="disclosure-arrow">▸</span> <span data-i18n="needsAttention">Needs Attention</span></span>
+      <span id="alertsCountBadge" class="stock-flag low" style="display:none;"></span>
+    </summary>
+    <div id="alertsList" style="margin-top:12px;"><p class="hint">Checking stock levels...</p></div>
+  </details>
 
-  <h2 class="section-title" data-i18n="missedSalesTitle">What Customers Wanted</h2>
-  <p class="hint" data-i18n="missedSalesHint">From "Item not found?" reports on the keeper's screen — patterns worth stocking.</p>
-  <div id="missedSalesList"><p class="hint">…</p></div>
+  <details class="tag-card" id="missedSalesPanel" open>
+    <summary style="cursor:pointer; font-weight:700; font-size:13px; font-family:var(--display); text-transform:uppercase; letter-spacing:.04em; list-style:none; display:flex; justify-content:space-between; align-items:center;">
+      <span><span class="disclosure-arrow">▸</span> <span data-i18n="missedSalesTitle">What Customers Wanted</span></span>
+      <span id="missedCountBadge" class="stock-flag ok" style="display:none;"></span>
+    </summary>
+    <p class="hint" style="margin-top:8px; margin-bottom:0;" data-i18n="missedSalesHint">From "Item not found?" reports on the keeper's screen — patterns worth stocking.</p>
+    <div id="missedSalesList" style="margin-top:10px;"><p class="hint">…</p></div>
+  </details>
 
   <h2 class="section-title" data-i18n="salesOverview">Sales Overview</h2>
   <div style="display:flex; gap:8px; margin-bottom:12px;">
@@ -581,11 +591,16 @@
 
   function renderAlerts(){
     const el = document.getElementById('alertsList');
+    const badge = document.getElementById('alertsCountBadge');
     const lowStock = allProducts.filter(p => Number(p.current_stock) <= Number(p.low_stock_threshold));
+
     if (!lowStock.length){
+      badge.style.display = 'none';
       el.innerHTML = `<p class="empty-state">${t('nothingNeedsAttention')}</p>`;
       return;
     }
+    badge.textContent = lowStock.length;
+    badge.style.display = 'inline-block';
     el.innerHTML = lowStock.map(p => `
       <div class="alert-card urgent">
         <div class="alert-title">⚠️ ${t('reorderSoon')} ${escapeHtml(p.name)}</div>
@@ -599,6 +614,7 @@
   // and "cooking oil" the next for the same real request.
   async function loadMissedSales(){
     const el = document.getElementById('missedSalesList');
+    const badge = document.getElementById('missedCountBadge');
     const since = new Date(Date.now() - 30 * 86400000).toISOString();
 
     try {
@@ -611,6 +627,7 @@
       if (error) throw error;
 
       if (!data.length){
+        badge.style.display = 'none';
         el.innerHTML = `<p class="empty-state">${t('noMissedSales')}</p>`;
         return;
       }
@@ -626,6 +643,9 @@
       });
 
       const items = Object.values(grouped).sort((a, b) => b.count - a.count || (b.lastAsked > a.lastAsked ? 1 : -1));
+
+      badge.textContent = items.length;
+      badge.style.display = 'inline-block';
 
       el.innerHTML = items.map(item => {
         const dateText = new Date(item.lastAsked).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
