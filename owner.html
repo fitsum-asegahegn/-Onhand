@@ -265,6 +265,14 @@
     </div>
   </div>
 
+  <details class="tag-card" id="archivedPanel">
+    <summary style="cursor:pointer; font-weight:700; font-size:13px; font-family:var(--display); text-transform:uppercase; letter-spacing:.04em; list-style:none;">
+      <span class="disclosure-arrow">▸</span> <span data-i18n="archivedProductsTitle">Archived Products</span>
+    </summary>
+    <p class="hint" style="margin-top:8px;" data-i18n="archivedProductsHint">Removed from your active catalog and the keeper's scanner — restore anytime, sales history is untouched.</p>
+    <div id="archivedList" style="margin-top:10px;"><p class="hint">…</p></div>
+  </details>
+
   <button class="btn-secondary" onclick="signOut()" style="width:100%;" data-i18n="signOut">Sign out</button>
 
   </div>
@@ -306,6 +314,13 @@
     if (name === 'Products') focusRegisterInput();
     window.scrollTo(0, 0);
   }
+
+  document.getElementById('archivedPanel').addEventListener('toggle', async function(){
+    if (this.open && !archivedLoaded){
+      archivedLoaded = true;
+      await loadArchivedProducts();
+    }
+  });
 
   function fmtBirr(n){ return Math.round(n).toLocaleString('en-US') + ' Birr'; }
 
@@ -452,6 +467,7 @@
         .from('products')
         .select('*')
         .eq('owner_id', profile.id)
+        .eq('is_archived', false)
         .order('name');
       if (error) throw error;
       allProducts = data || [];
@@ -555,6 +571,47 @@
           </div>
           <p id="restockMsg-${productId}" style="font-size:12px; color:var(--good); display:none; margin-top:8px;"></p>
         </div>
+
+        <div style="border-top:1px solid var(--line); padding-top:12px; margin-top:14px; display:flex; gap:10px;">
+          <button class="btn-secondary" style="flex:1; font-size:12.5px;" onclick="toggleEditProduct('${productId}')">✏️ ${t('editBtn')}</button>
+          <button class="btn-danger-outline" style="flex:1; font-size:12.5px;" onclick="archiveProduct('${productId}')">🗑 ${t('archiveBtn')}</button>
+        </div>
+
+        <div id="editForm-${productId}" style="display:none; margin-top:14px; border-top:1px solid var(--line); padding-top:14px;">
+          <div class="field">
+            <label>${t('productName')}</label>
+            <input type="text" id="editName-${productId}" value="${escapeHtml(product.name)}">
+          </div>
+          <div class="field">
+            <label>${t('soldBy')}</label>
+            <select id="editUnit-${productId}">
+              <option value="piece" ${product.unit === 'piece' ? 'selected' : ''}>${t('unitPiece')}</option>
+              <option value="kg" ${product.unit === 'kg' ? 'selected' : ''}>${t('unitKg')}</option>
+              <option value="litre" ${product.unit === 'litre' ? 'selected' : ''}>${t('unitLitre')}</option>
+              <option value="pack" ${product.unit === 'pack' ? 'selected' : ''}>${t('unitPack')}</option>
+            </select>
+          </div>
+          <div class="stat-row" style="margin-bottom:14px;">
+            <div class="field" style="margin-bottom:0;">
+              <label>${t('costPrice')}</label>
+              <input type="number" id="editCost-${productId}" min="0" step="0.5" value="${product.cost_price}">
+            </div>
+            <div class="field" style="margin-bottom:0;">
+              <label>${t('sellingPrice')}</label>
+              <input type="number" id="editPrice-${productId}" min="0" step="0.5" value="${product.selling_price}">
+            </div>
+          </div>
+          <div class="field">
+            <label>${t('lowStockBelow')}</label>
+            <input type="number" id="editThreshold-${productId}" min="0" step="0.5" value="${product.low_stock_threshold}">
+          </div>
+          <p class="hint" style="margin-top:0;">${t('editStockHint')}</p>
+          <div style="display:flex; gap:10px;">
+            <button class="btn-secondary" style="flex:1;" onclick="toggleEditProduct('${productId}')">${t('cancel')}</button>
+            <button class="btn-primary" style="flex:1;" onclick="saveProductEdit('${productId}')">${t('saveChanges')}</button>
+          </div>
+          <p id="editMsg-${productId}" style="font-size:12px; color:red; display:none; margin-top:8px;"></p>
+        </div>
       `;
       JsBarcode('#detailBarcode-' + productId, product.barcode, { format: 'CODE128', height: 50, displayValue: true, fontSize: 11 });
       panel.dataset.loaded = '1';
@@ -587,6 +644,84 @@
     panel.dataset.loaded = '0';
     await loadProducts();
     await toggleProductDetails(productId);
+  }
+
+  function toggleEditProduct(productId){
+    const form = document.getElementById('editForm-' + productId);
+    if (form) form.style.display = form.style.display === 'block' ? 'none' : 'block';
+  }
+
+  async function saveProductEdit(productId){
+    const msg = document.getElementById('editMsg-' + productId);
+    msg.style.display = 'none';
+
+    const name = document.getElementById('editName-' + productId).value.trim();
+    const unit = document.getElementById('editUnit-' + productId).value;
+    const cost = parseFloat(document.getElementById('editCost-' + productId).value) || 0;
+    const price = parseFloat(document.getElementById('editPrice-' + productId).value) || 0;
+    const threshold = parseFloat(document.getElementById('editThreshold-' + productId).value) || 0;
+
+    if (!name){ msg.textContent = t('enterProductName'); msg.style.display = 'block'; return; }
+
+    const collision = allProducts.find(p => p.id !== productId && p.name.trim().toLowerCase() === name.toLowerCase());
+    if (collision){
+      msg.textContent = `"${name}" ${t('nameUsedByAnother')}`;
+      msg.style.display = 'block';
+      return;
+    }
+
+    const { error } = await supabase.from('products').update({
+      name, unit, cost_price: cost, selling_price: price, low_stock_threshold: threshold
+    }).eq('id', productId);
+
+    if (error){ msg.textContent = error.message; msg.style.display = 'block'; return; }
+
+    const panel = document.getElementById('details-' + productId);
+    panel.dataset.loaded = '0';
+    await loadProducts();
+    await toggleProductDetails(productId);
+  }
+
+  async function archiveProduct(productId){
+    const product = allProducts.find(p => p.id === productId);
+    if (!product) return;
+    const ok = confirm(t('archiveConfirm').replace('{name}', product.name));
+    if (!ok) return;
+
+    const { error } = await supabase.from('products').update({ is_archived: true }).eq('id', productId);
+    if (error){ alert('Could not archive: ' + error.message); return; }
+    await loadProducts();
+  }
+
+  let archivedLoaded = false;
+
+  async function loadArchivedProducts(){
+    const el = document.getElementById('archivedList');
+    try {
+      const { data, error } = await supabase
+        .from('products').select('*')
+        .eq('owner_id', profile.id).eq('is_archived', true)
+        .order('name');
+      if (error) throw error;
+      if (!data.length){ el.innerHTML = `<p class="empty-state">${t('noArchivedProducts')}</p>`; return; }
+      el.innerHTML = data.map(p => `
+        <div class="product-row">
+          <div>
+            <div class="name">${escapeHtml(p.name)}</div>
+            <div class="meta">${p.current_stock} ${p.unit}</div>
+          </div>
+          <button class="btn-secondary" style="width:auto; padding:6px 12px; font-size:12px;" onclick="restoreProduct('${p.id}')">${t('restoreBtn')}</button>
+        </div>`).join('');
+    } catch (e) {
+      el.innerHTML = `<p style="color:red; font-size:12.5px;">${e.message}</p>`;
+    }
+  }
+
+  async function restoreProduct(productId){
+    const { error } = await supabase.from('products').update({ is_archived: false }).eq('id', productId);
+    if (error){ alert('Could not restore: ' + error.message); return; }
+    await loadArchivedProducts();
+    await loadProducts();
   }
 
   function renderAlerts(){

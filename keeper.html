@@ -135,7 +135,8 @@
       const { data, error } = await supabase
         .from('products')
         .select('id, name, unit, selling_price, cost_price, current_stock, barcode')
-        .eq('owner_id', profile.owner_id);
+        .eq('owner_id', profile.owner_id)
+        .eq('is_archived', false);
       if (error) throw error;
       cacheProducts(profile.owner_id, data || []);
       renderStockList(data || []);
@@ -181,6 +182,7 @@
           .select('id, name, unit, selling_price, cost_price, current_stock')
           .eq('owner_id', profile.owner_id)
           .eq('barcode', code)
+          .eq('is_archived', false)
           .maybeSingle();
         if (error) throw error;
         if (data) return data;
