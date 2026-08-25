@@ -265,6 +265,12 @@
     </div>
   </div>
 
+  <div class="tag-card">
+    <span class="tag-label" data-i18n="notificationsTitle">🔔 Notifications</span>
+    <p class="hint" style="margin-top:6px;" data-i18n="notificationsHint">Local reminders only, shown while Onhand is open in your browser — not a real push notification, so it won't reach you if the app is fully closed. Surfaces new low-stock alerts and new customer requests.</p>
+    <button class="btn-secondary" id="notifToggleBtn" style="width:100%; margin-top:10px;"></button>
+  </div>
+
   <details class="tag-card" id="archivedPanel">
     <summary style="cursor:pointer; font-weight:700; font-size:13px; font-family:var(--display); text-transform:uppercase; letter-spacing:.04em; list-style:none;">
       <span class="disclosure-arrow">▸</span> <span data-i18n="archivedProductsTitle">Archived Products</span>
@@ -724,6 +730,94 @@
     await loadProducts();
   }
 
+  // ===== LOCAL NOTIFICATIONS =====
+  // Genuinely local: fired only while this tab/PWA instance is open and
+  // running — NOT real push notifications, which would need a backend
+  // push service and would work even with the app fully closed. Same
+  // honest framing as the Settings copy above; don't oversell this.
+
+  const NOTIF_PREFIX = 'onhand_notified_';
+  function todayKey(){ return new Date().toISOString().slice(0, 10); }
+
+  function getNotifiedSet(kind){
+    try {
+      const raw = localStorage.getItem(NOTIF_PREFIX + kind + '_' + todayKey());
+      return new Set(raw ? JSON.parse(raw) : []);
+    } catch (e) { return new Set(); }
+  }
+  function saveNotifiedSet(kind, set){
+    try { localStorage.setItem(NOTIF_PREFIX + kind + '_' + todayKey(), JSON.stringify([...set])); } catch (e) {}
+  }
+
+  function fireLocalNotification(title, body){
+    if (!('Notification' in window) || Notification.permission !== 'granted') return;
+    // Don't interrupt with an OS notification for something already
+    // visible on screen right now.
+    if (document.visibilityState === 'visible') return;
+    try {
+      if (navigator.serviceWorker && navigator.serviceWorker.controller){
+        navigator.serviceWorker.ready.then(reg => reg.showNotification(title, {
+          body, icon: 'icon-192.png', badge: 'icon-192.png'
+        }));
+      } else {
+        new Notification(title, { body, icon: 'icon-192.png' });
+      }
+    } catch (e) { console.warn('Notification failed', e); }
+  }
+
+  function checkLowStockNotifications(lowStock){
+    const seen = getNotifiedSet('lowstock');
+    const newOnes = lowStock.filter(p => !seen.has(p.id));
+    if (!newOnes.length) return;
+
+    const title = newOnes.length === 1
+      ? t('notifLowStockTitleSingle')
+      : t('notifLowStockTitleMulti').replace('{n}', newOnes.length);
+    fireLocalNotification(title, newOnes.map(p => p.name).slice(0, 5).join(', '));
+
+    newOnes.forEach(p => seen.add(p.id));
+    saveNotifiedSet('lowstock', seen);
+  }
+
+  function checkMissedSalesNotifications(items){
+    const seen = getNotifiedSet('missed');
+    const newOnes = items.filter(item => !seen.has(item.name.toLowerCase()));
+    if (!newOnes.length) return;
+
+    const title = newOnes.length === 1
+      ? t('notifMissedTitleSingle')
+      : t('notifMissedTitleMulti').replace('{n}', newOnes.length);
+    fireLocalNotification(title, newOnes.map(i => i.name).slice(0, 5).join(', '));
+
+    newOnes.forEach(item => seen.add(item.name.toLowerCase()));
+    saveNotifiedSet('missed', seen);
+  }
+
+  function updateNotifButton(){
+    const btn = document.getElementById('notifToggleBtn');
+    if (!('Notification' in window)){
+      btn.textContent = t('notifNotSupported');
+      btn.disabled = true;
+      return;
+    }
+    if (Notification.permission === 'granted'){
+      btn.textContent = '✓ ' + t('notifEnabled');
+      btn.disabled = true;
+    } else if (Notification.permission === 'denied'){
+      btn.textContent = t('notifBlocked');
+      btn.disabled = true;
+    } else {
+      btn.textContent = t('notifEnableBtn');
+      btn.disabled = false;
+    }
+  }
+
+  document.getElementById('notifToggleBtn').addEventListener('click', async () => {
+    if (!('Notification' in window) || Notification.permission !== 'default') return;
+    await Notification.requestPermission();
+    updateNotifButton();
+  });
+
   function renderAlerts(){
     const el = document.getElementById('alertsList');
     const badge = document.getElementById('alertsCountBadge');
@@ -741,6 +835,8 @@
         <div class="alert-title">⚠️ ${t('reorderSoon')} ${escapeHtml(p.name)}</div>
         <div>${p.current_stock} ${p.unit} ${t('stockLeft')}</div>
       </div>`).join('');
+
+    checkLowStockNotifications(lowStock);
   }
 
   // Aggregated, not a raw log — three separate "cooking oil" reports are
@@ -796,6 +892,8 @@
             </div>
           </div>`;
       }).join('');
+
+      checkMissedSalesNotifications(items);
     } catch (e) {
       el.innerHTML = `<p style="color:red; font-size:12.5px;">${e.message}</p>`;
     }
@@ -1240,9 +1338,21 @@
     document.getElementById('shopCode').textContent = profile.id;
     document.getElementById('registerScannerReadyText').textContent =
       currentLang === 'am' ? 'ለስካን ዝግጁ' : 'Ready for scanner input';
+    updateNotifButton();
     await loadProducts();
     await loadStats('today');
     await loadMissedSales();
+
+    // The actual "reminder while open" mechanism: re-check every 5
+    // minutes for as long as this tab/PWA instance stays running.
+    // loadProducts() and loadMissedSales() each call their own
+    // check*Notifications() internally, so a new low-stock item or a
+    // new customer request surfaces as a local notification without
+    // needing the owner to manually refresh or reopen the app.
+    setInterval(async () => {
+      await loadProducts();
+      await loadMissedSales();
+    }, 5 * 60 * 1000);
   })();
 </script>
 </body>

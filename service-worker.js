@@ -69,3 +69,18 @@ self.addEventListener('fetch', (event) => {
       })
   );
 });
+
+// Tapping a local reminder notification (low stock / new customer
+// request, fired from owner.html) brings the owner back into the app
+// instead of just dismissing to the home screen.
+self.addEventListener('notificationclick', (event) => {
+  event.notification.close();
+  event.waitUntil(
+    self.clients.matchAll({ type: 'window' }).then((windowClients) => {
+      for (const client of windowClients) {
+        if (client.url.includes('owner.html') && 'focus' in client) return client.focus();
+      }
+      if (self.clients.openWindow) return self.clients.openWindow('owner.html');
+    })
+  );
+});
