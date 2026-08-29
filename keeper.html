@@ -224,10 +224,20 @@
       document.getElementById('startScanBtn').style.display = 'none';
 
       html5QrCode = new Html5Qrcode("reader", {
-        formatsToSupport: [ Html5QrcodeSupportedFormats.CODE_128 ],
-        useBarCodeDetectorIfSupported: true,
-        verbose: false
-      });
+  // Onhand's own generated barcodes are CODE_128, but real manufacturer
+  // barcodes (like Cocoa butter 2's) are EAN-13/UPC-A — support both so
+  // a registered product is actually sellable via camera scan, not just
+  // manual entry.
+  formatsToSupport: [
+    Html5QrcodeSupportedFormats.CODE_128,
+    Html5QrcodeSupportedFormats.EAN_13,
+    Html5QrcodeSupportedFormats.EAN_8,
+    Html5QrcodeSupportedFormats.UPC_A,
+    Html5QrcodeSupportedFormats.UPC_E
+  ],
+  useBarCodeDetectorIfSupported: true,
+  verbose: false
+});
 
       await html5QrCode.start(
         { facingMode: "environment" },
