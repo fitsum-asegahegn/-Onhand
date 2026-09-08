@@ -2,7 +2,7 @@
 
 A phone-first tool for a shop owner to track sales, stock, and profit remotely, and for a keeper to scan and sell without ever seeing cost prices or margins.
 
-Built by Fitsum Asegahegn. Complementary to the Applied Finance Suite, but a separate product: full-stack operational tooling rather than statistical demos.
+Built by Fitsum Asegahegn.     Complementary to the Applied Finance Suite, but a separate product: full-stack operational tooling rather than statistical demos.
 
 ---
 
