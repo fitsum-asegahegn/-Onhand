@@ -1086,18 +1086,65 @@
     if (e.key === 'Enter') { e.preventDefault(); document.getElementById('manualRegisterBtn').click(); }
   });
 
-  function handleScannedBarcode(code){
+  // handleScannedBarcode is async and checks the DATABASE directly, not
+  // just the in-memory allProducts list. allProducts only ever holds
+  // ACTIVE products (loadProducts() filters is_archived = false), so an
+  // in-memory-only check could never see an archived product still
+  // holding that barcode — it would let the form open, then fail at
+  // save time with a raw duplicate-key error from Postgres. Querying
+  // the database (both active and archived) catches that case up front
+  // and offers the right fix (restore) instead of a dead end.
+  async function handleScannedBarcode(code){
     const dupMsg = document.getElementById('registerDuplicateMsg');
-    dupMsg.style.display = 'none';
+    document.getElementById('registerForm').style.display = 'none';
+    dupMsg.style.display = 'block';
+    dupMsg.innerHTML = t('checkingBarcode');
 
-    const existing = allProducts.find(p => p.barcode === code);
-    if (existing){
-      dupMsg.innerHTML = `<b>${escapeHtml(existing.name)}</b> ${t('barcodeAlreadyRegistered')} <span style="text-decoration:underline; cursor:pointer;" onclick="showTab('Products'); scrollToProductDetails('${existing.id}')">${t('scrollToExisting')}</span>`;
+    let match = null;
+    try {
+      const { data, error } = await supabase
+        .from('products')
+        .select('id, name, is_archived')
+        .eq('owner_id', profile.id)
+        .eq('barcode', code)
+        .maybeSingle();
+      if (error) throw error;
+      match = data;
+    } catch (e) {
+      // Lookup failed (offline, etc.) — fall back to the in-memory active
+      // list rather than blocking registration entirely; the per-shop
+      // unique index is still the final backstop at save time either way.
+      match = allProducts.find(p => p.barcode === code) || null;
+    }
+
+    if (match && !match.is_archived){
+      dupMsg.innerHTML = `<b>${escapeHtml(match.name)}</b> ${t('barcodeAlreadyRegistered')} <span style="text-decoration:underline; cursor:pointer;" onclick="showTab('Products'); scrollToProductDetails('${match.id}')">${t('scrollToExisting')}</span>`;
       dupMsg.style.display = 'block';
-      document.getElementById('registerForm').style.display = 'none';
       return;
     }
+
+    if (match && match.is_archived){
+      dupMsg.innerHTML = `<b>${escapeHtml(match.name)}</b> ${t('barcodeBelongsToArchived')} <span style="text-decoration:underline; cursor:pointer;" onclick="restoreFromRegister('${match.id}')">${t('restoreItAction')}</span>`;
+      dupMsg.style.display = 'block';
+      return;
+    }
+
+    dupMsg.style.display = 'none';
     openRegisterForm(code);
+  }
+
+  // Restores an archived product straight from the "Register" flow, so
+  // scanning a barcode that belongs to a previously-archived product
+  // leads somewhere useful instead of a dead-end duplicate error.
+  async function restoreFromRegister(productId){
+    const dupMsg = document.getElementById('registerDuplicateMsg');
+    const { error } = await supabase.from('products').update({ is_archived: false }).eq('id', productId);
+    if (error){ alert('Could not restore: ' + error.message); return; }
+
+    dupMsg.style.display = 'none';
+    await loadProducts();
+    showTab('Products');
+    scrollToProductDetails(productId);
   }
 
   function openRegisterForm(barcode){
@@ -1155,9 +1202,10 @@
         barcode: scannedRegisterBarcode
       });
       if (error){
-        // Most likely the per-shop unique constraint catching a genuine
-        // re-scan race (e.g. scanned twice quickly) — surface it plainly
-        // rather than a raw Postgres error.
+        // Most likely the per-shop unique index catching a genuine
+        // re-scan race (e.g. scanned twice quickly, or the archived-match
+        // lookup above failed offline) — surface it plainly rather than
+        // a raw Postgres error.
         alert('Could not register product: ' + error.message);
         return;
       }
