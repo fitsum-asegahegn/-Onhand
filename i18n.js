@@ -169,7 +169,11 @@ const translations = {
     couldNotOpenCamera: "Couldn't open camera. Check permissions.",
     torchNotAvailable: "Torch not available on this device.",
     notLinkedTitle: "This keeper account is not linked to a shop.",
-    notLinkedBody: "Please contact your shop owner for the correct shop code and sign up again."
+    notLinkedBody: "Please contact your shop owner for the correct shop code and sign up again.",
+
+    barcodeBelongsToArchived: "is archived, but still has this barcode.",
+    restoreItAction: "Restore it",
+    checkingBarcode: "Checking barcode…"
   },
 
   am: {
@@ -328,7 +332,11 @@ const translations = {
     couldNotOpenCamera: "ካሜራ መክፈት አልተቻለም። ፍቃድ ያረጋግጡ።",
     torchNotAvailable: "ብርሃን በዚህ መሳሪያ ላይ አይገኝም።",
     notLinkedTitle: "ይህ የጠባቂ መለያ ከምንም ሱቅ ጋር አልተገናኘም።",
-    notLinkedBody: "እባክዎ ትክክለኛውን የሱቅ ኮድ ከባለቤቱ ይጠይቁ እና እንደገና ይመዝገቡ።"
+    notLinkedBody: "እባክዎ ትክክለኛውን የሱቅ ኮድ ከባለቤቱ ይጠይቁ እና እንደገና ይመዝገቡ።",
+
+    barcodeBelongsToArchived: "ተመዝግቧል ግን መዝገብ ውስጥ ተቀምጧል።",
+    restoreItAction: "መልስ አምጣ",
+    checkingBarcode: "ባርኮድ በመፈተሽ ላይ…"
   }
 };
 
