@@ -1,5 +1,5 @@
 // ============================================================
-// Onhand — service worker
+// Onhand — service worker 
 //
 // STRATEGY: network-first for the app shell, not cache-first.
 // A pilot with active bug-fixing needs every deploy to actually reach
